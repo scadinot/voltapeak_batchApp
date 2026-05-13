@@ -92,7 +92,9 @@ validée bit-exact à la 6ᵉ décimale contre la référence Python.
 
 - macOS 26.1+ requis.
 - Xcode 26+ pour builder (`objectVersion = 77`).
-- Universal binary (Intel + Apple Silicon).
+- Architecture cible : Apple Silicon (`arm64`) uniquement — macOS 26
+  (Tahoe) n'étant plus disponible sur Mac Intel, le binaire n'a pas de
+  tranche `x86_64` utile.
 
 ### Notes de validation
 
