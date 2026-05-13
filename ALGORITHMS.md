@@ -25,7 +25,7 @@ exports par fichier et agrégation multi-électrodes.
   ```
 - **Séparateurs configurables** : tabulation, virgule, point-virgule, espace
 - **Décimale configurable** : point ou virgule
-- **Filtrage anticipé** : les lignes à courant nul sont écartées dès la lecture (le Python les filtre dans `processData`, mais le résultat est identique car la somme des zéros est nulle)
+- **Filtrage anticipé** : les lignes à courant nul sont écartées dès la lecture. L'équivalence avec la référence Python tient au fait que celle-ci applique le même filtre, plus tard, dans `processData` ; les opérations en aval (tri, indices, taille `n` utilisée dans `lam = 1e3·n²`, marges `floor(n × marginRatio)`, gradient non-uniforme) ne dépendent que de l'ensemble final des points retenus, pas de l'étape où le filtre est appliqué.
 
 ## 2. Traitement des données
 
@@ -129,7 +129,7 @@ recherche est retourné (repli défensif).
 
 Documentation numpy : `numpy.gradient` — *second order accurate central differences in the interior points*.
 
-## 5. Estimation de baseline asPLS Zhang 2020
+## 5. Estimation de baseline asPLS (Zhang 2020)
 
 **Implémentation :** `WhittakerASPLS.aspls(y:lam:diffOrder:maxIter:tol:weights:alpha:asymmetricCoef:)`
 
@@ -141,18 +141,20 @@ L'asPLS (**a**daptive **s**moothness **p**enalized **l**east **s**quares)
 ajuste une courbe lisse sous le signal en minimisant :
 
 ```
-||W·(y − z)||² + λ · z^T · D^T · diag(α) · D · z
+Σᵢ wᵢ · (yᵢ − zᵢ)² + λ · z^T · D^T · diag(α) · D · z
 ```
 
 où :
 - `y` est le signal (lissé) d'entrée
 - `z` est la baseline cherchée
-- `W = diag(w)` matrice diagonale des poids (chaque point pondéré séparément)
+- `w` est le vecteur des poids (chaque point pondéré séparément)
 - `D` matrice de différences finies d'ordre 2 (pénalise la courbure)
 - `α` vecteur de pénalité adaptative locale (clé de l'asPLS)
 - `λ` paramètre de lissage global
 
 ### Système linéaire résolu à chaque itération
+
+En notant `W = diag(w)`, la condition de stationnarité s'écrit :
 
 ```
 (W + λ · diag(α) · D^T·D) · z = W · y
@@ -232,7 +234,7 @@ Implémentation Python de référence : [`pybaselines.whittaker.aspls`](https://
 | Pénalité | constante `λ` partout | adaptative `λ · α[i]` |
 | Poids | binaire : `p` si `y > z`, `1−p` sinon | sigmoïde basée sur `std(résidus négatifs)` |
 | Convergence | sur la baseline | sur les poids |
-| Paramètre clé | `p` (asymétrie, ~0.01) | `k` (asymetric_coef, 0.5) |
+| Paramètre clé | `p` (asymétrie, ~0.01) | `k` (asymmetric_coef, 0.5) |
 
 Une version précédente du port Swift implémentait **asLS** (par erreur). Le
 résultat divergeait de ~22 % du Python. Le port actuel reproduit asPLS
@@ -278,6 +280,12 @@ pour la ligne du classeur Excel agrégé final (§9).
 5. La colonne `Fréq (Hz)` est en position B avec la valeur 50.0 par défaut.
 
 ## Pseudocode du pipeline complet pour un fichier
+
+> Le pseudocode adopte la nomenclature Python/pybaselines (`lam`, `weights`,
+> `max_iter`, `tol`, `k`) par souci de lisibilité ; la signature Swift
+> correspondante est
+> `WhittakerASPLS.aspls(y:lam:diffOrder:maxIter:tol:weights:alpha:asymmetricCoef:)`
+> (cf. §5, où `k` désigne `asymmetric_coef` / `asymmetricCoef`).
 
 ```
 read SWV file → DataFrame
