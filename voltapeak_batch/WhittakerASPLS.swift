@@ -45,6 +45,10 @@ enum WhittakerASPLS {
 
         var baseline = [Double](repeating: 0.0, count: n)
 
+        // pybaselines fait `for i in range(max_iter + 1):` (cf. _Whittaker.aspls)
+        // — donc `maxIter + 1` itérations possibles. La borne inclusive
+        // `0...maxIter` reproduit ce comportement à l'identique ; ne pas
+        // remplacer par `0..<maxIter` sous peine de casser la parité numérique.
         for _ in 0...maxIter {
             // lhs = diag(a) · (λ · DTD), puis + diag(w) sur la diagonale
             var A = [[Double]](repeating: [Double](repeating: 0.0, count: n), count: n)

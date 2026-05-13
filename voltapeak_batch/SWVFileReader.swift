@@ -81,12 +81,22 @@ enum SWVFileReader {
         var points: [VoltammetryPoint] = []
 
         for line in dataLines {
-            let columns = line.components(separatedBy: config.columnSeparator.rawValue)
-            guard columns.count >= 2 else { continue }
+            // Découpage : pour le séparateur espace on compresse les répétitions
+            // (plusieurs espaces consécutifs → un seul délimiteur) ; pour les
+            // autres séparateurs on filtre simplement les tokens vides issus
+            // d'un séparateur en début/fin de ligne.
+            let rawColumns: [String]
+            if config.columnSeparator == .space {
+                rawColumns = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            } else {
+                rawColumns = line.components(separatedBy: config.columnSeparator.rawValue)
+                    .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            }
+            guard rawColumns.count >= 2 else { continue }
 
-            let potentialString = columns[0].trimmingCharacters(in: .whitespaces)
+            let potentialString = rawColumns[0].trimmingCharacters(in: .whitespaces)
                 .replacingOccurrences(of: config.decimalSeparator.rawValue, with: ".")
-            let currentString = columns[1].trimmingCharacters(in: .whitespaces)
+            let currentString = rawColumns[1].trimmingCharacters(in: .whitespaces)
                 .replacingOccurrences(of: config.decimalSeparator.rawValue, with: ".")
 
             if let potential = Double(potentialString),

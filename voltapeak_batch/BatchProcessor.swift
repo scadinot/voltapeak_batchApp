@@ -154,10 +154,13 @@ enum BatchProcessor {
     /// Reproduit la regex Python `(.+)_C(\d{2})\.txt`.
     /// - Si le nom correspond : retourne (base, "C<NN>")
     /// - Sinon : (nom complet, "")
+    ///
+    /// Le match est insensible à la casse pour tolérer les exports Windows en
+    /// `.TXT` (le `_C` et l'extension peuvent apparaître en majuscules).
     static func parseBaseAndElectrode(fileName: String) -> (base: String, electrode: String) {
         let pattern = #"^(.+)_C(\d{2})\.txt$"#
         let range = NSRange(fileName.startIndex..<fileName.endIndex, in: fileName)
-        guard let regex = try? NSRegularExpression(pattern: pattern),
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
               let match = regex.firstMatch(in: fileName, range: range),
               match.numberOfRanges == 3,
               let baseRange = Range(match.range(at: 1), in: fileName),
@@ -165,6 +168,8 @@ enum BatchProcessor {
         else {
             return (fileName, "")
         }
+        // Le préfixe "C" est forcé en majuscule pour un libellé d'électrode
+        // canonique quel que soit le casing du fichier source.
         return (String(fileName[baseRange]), "C\(fileName[elecRange])")
     }
 }

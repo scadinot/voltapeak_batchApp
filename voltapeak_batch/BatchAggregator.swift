@@ -27,15 +27,19 @@ enum BatchAggregator {
         frequencyHz: Double = 50.0
     ) throws -> URL {
         // 1. Tri stable des électrodes distinctes (ordre lexicographique : C01 < C02 < …)
-        let electrodes = Array(Set(results.map(\.electrode))).sorted()
+        // Les fichiers hors convention `<base>_C<NN>.txt` ont une électrode vide :
+        // ils contribuent une ligne `Base`/`Fréq` mais ne créent pas de colonnes
+        // « sans préfixe » qui seraient ambiguës dans le récapitulatif.
+        let electrodes = Array(Set(results.map(\.electrode)))
+            .filter { !$0.isEmpty }
+            .sorted()
 
         // 2. En-têtes : Base | Fréq (Hz) | <e0> - Tension | <e0> - Courant | <e0> - Charge | …
         var headers: [String] = ["Base", "Fréq (Hz)"]
         for elec in electrodes {
-            let prefix = elec.isEmpty ? "" : "\(elec) - "
-            headers.append("\(prefix)Tension (V)")
-            headers.append("\(prefix)Courant (A)")
-            headers.append("\(prefix)Charge (C)")
+            headers.append("\(elec) - Tension (V)")
+            headers.append("\(elec) - Courant (A)")
+            headers.append("\(elec) - Charge (C)")
         }
 
         // 3. Regroupement par base (en préservant l'ordre d'apparition)
@@ -53,11 +57,9 @@ enum BatchAggregator {
         let freqCol = XLSXWriter.columnLetter(1)     // colonne B
         var courantColForElectrode: [String: String] = [:]
         for (i, h) in headers.enumerated() {
-            if h.hasSuffix("Courant (A)") {
-                let elec = h.replacingOccurrences(of: " - Courant (A)", with: "")
-                // Cas électrode vide : header == "Courant (A)"
-                let key = elec == "Courant (A)" ? "" : elec
-                courantColForElectrode[key] = XLSXWriter.columnLetter(i)
+            if h.hasSuffix(" - Courant (A)") {
+                let elec = String(h.dropLast(" - Courant (A)".count))
+                courantColForElectrode[elec] = XLSXWriter.columnLetter(i)
             }
         }
 
