@@ -185,7 +185,9 @@ Le récapitulatif inter-fichiers injecte des **formules Excel**
 
 - **macOS 26.1+** — déploiement minimum.
 - **Xcode 26+** pour builder (`objectVersion = 77` du `project.pbxproj`).
-- **Architectures** : Universal (Intel x86_64 + Apple Silicon arm64).
+- **Architecture** : Apple Silicon (`arm64`) uniquement — macOS 26
+  (Tahoe) n'est plus supporté sur les Mac Intel, donc une éventuelle
+  tranche `x86_64` ne s'exécuterait sur aucune cible utile.
 - **App Sandbox** désactivé pour permettre la lecture/écriture du dossier
   voisin `<entrée> (results)`.
 
