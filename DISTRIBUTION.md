@@ -10,9 +10,14 @@ de la famille `voltapeak*` ; voir
 
 ## Prérequis communs
 
-Le projet est livré avec `CODE_SIGN_IDENTITY = "-"` (ad-hoc) et
-`ENABLE_APP_SANDBOX = NO`. Une build Release locale produit donc une
-application exécutable telle quelle sur la machine de développement.
+Dans Xcode, onglet **Signing & Capabilities** :
+
+```
+Team               : votre équipe Apple (pour notarisation seulement)
+Bundle Identifier  : com.cadinot.voltapeak-batch
+
+App Sandbox        : désactivé
+```
 
 Pour les versions distribuables, vérifier dans le pbxproj :
 
@@ -22,6 +27,9 @@ CURRENT_PROJECT_VERSION       = 1
 PRODUCT_BUNDLE_IDENTIFIER     = com.cadinot.voltapeak-batch
 MACOSX_DEPLOYMENT_TARGET      = 26.1
 ```
+
+Le projet est livré avec `CODE_SIGN_IDENTITY = "-"` (ad-hoc), suffisant
+pour exécuter sur la machine de développement.
 
 ---
 
@@ -44,20 +52,7 @@ Le squelette est facilement adaptable à ce repo :
 Pour usage personnel, prototype, ou diffusion au sein d'une équipe
 restreinte.
 
-### Build Release locale
-
-```bash
-xcodebuild -project voltapeak_batch.xcodeproj \
-           -scheme voltapeak_batch \
-           -configuration Release \
-           -derivedDataPath ./build
-open ./build/Build/Products/Release/voltapeak_batch.app
-```
-
-Le binaire est inutilisable en l'état **sur une autre machine**
-(Gatekeeper refusera) ; pour ça, voir l'option 2.
-
-### Archive depuis Xcode
+### Étapes
 
 1. **Archive** : `Product → Destination → Any Mac` puis `Product →
    Archive`.
@@ -101,13 +96,41 @@ etc.) sans warning au lancement.
 ### Prérequis additionnels
 
 - Compte **Apple Developer Program** actif (99 €/an).
+- Certificat **Developer ID Application** installé dans le Keychain.
 - Hardened Runtime activé dans Signing & Capabilities :
   ```
   ✅ Hardened Runtime
   ```
-- Certificat **Developer ID Application** installé dans le Keychain.
 
 ### Étapes
+
+1. **Archive** : `Product → Archive` (comme option 1).
+2. **Distribute App** dans Organizer :
+   - Choisir **« Developer ID »** (pas « Copy App »).
+   - **Upload** pour notarisation (option par défaut).
+   - Apple va signer + scanner + notariser (quelques minutes à quelques
+     heures).
+3. **Vérifier** :
+   ```bash
+   xcrun notarytool history --apple-id <votre@email.com>
+   ```
+4. **Agrafer le ticket** :
+   ```bash
+   xcrun stapler staple voltapeak_batch.app
+   ```
+5. **Créer et agrafer le DMG** :
+   ```bash
+   hdiutil create -volname "voltapeak_batch" -srcfolder voltapeak_batch.app \
+                  -ov -format UDZO voltapeak_batch-1.0.0.dmg
+   xcrun stapler staple voltapeak_batch-1.0.0.dmg
+   ```
+
+Résultat : `voltapeak_batch-1.0.0.dmg` notarisé, lancé sans warning sur
+n'importe quel Mac.
+
+### Alternative ligne de commande
+
+Pour automatiser hors Xcode Organizer (à terme dans une CI dédiée) :
 
 ```bash
 # Signature
@@ -115,10 +138,6 @@ codesign --force --options runtime \
          --sign "Developer ID Application: <Votre nom> (<TEAM_ID>)" \
          --timestamp \
          voltapeak_batch.app
-
-# Vérification
-codesign -dv --verbose=4 voltapeak_batch.app
-spctl -a -v voltapeak_batch.app
 
 # Empaqueter pour notarisation
 ditto -c -k --keepParent voltapeak_batch.app voltapeak_batch.zip
@@ -140,30 +159,6 @@ xcrun notarytool store-credentials AC_PROFILE \
       --team-id "<TEAM_ID>" \
       --password "<app-specific-password>"
 ```
-
-### DMG notarisé
-
-```bash
-hdiutil create -volname "voltapeak_batch" \
-               -srcfolder voltapeak_batch.app \
-               -ov -format UDZO \
-               voltapeak_batch-1.0.0.dmg
-
-codesign --sign "Developer ID Application: <...>" \
-         --timestamp \
-         voltapeak_batch-1.0.0.dmg
-
-xcrun notarytool submit voltapeak_batch-1.0.0.dmg \
-      --keychain-profile "AC_PROFILE" --wait
-xcrun stapler staple voltapeak_batch-1.0.0.dmg
-```
-
-### Distribution App Store
-
-Non supportée en l'état : il faudrait activer
-`ENABLE_APP_SANDBOX = YES` et ajouter l'entitlement
-`com.apple.security.files.user-selected.read-write`. Voir
-[DEVELOPMENT.md](DEVELOPMENT.md) pour les ajustements nécessaires.
 
 ---
 
