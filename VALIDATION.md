@@ -30,7 +30,8 @@ Cette validation n'est **pas rejouée** ici. Pour la vérifier en pratique :
 
 1. Choisir un fichier SWV de test.
 2. L'ouvrir dans `voltapeakApp` → noter le pic affiché.
-3. Le placer seul dans un dossier et lancer `voltapeak_batchApp` dessus.
+3. Le placer seul dans un dossier et lancer l'app `voltapeak_batch`
+   (scheme du repo `voltapeak_batchApp`) dessus.
 4. Ouvrir le classeur récapitulatif : le pic dans l'unique ligne doit
    être identique à celui affiché par `voltapeakApp` (mêmes décimales).
 
