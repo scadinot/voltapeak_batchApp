@@ -3,7 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # Filtres : `v[0-9]*` matche `v1`, `v1.0.0`, `v2026-05-13` ; `[0-9]*`
+      # matche un tag commençant par un chiffre (`1.0.0`, `2026.05`). Refuse
+      # explicitement les variantes type `v-test`, `valpha` etc.
+      - 'v[0-9]*'
       - '[0-9]*'
 
 permissions:
@@ -30,7 +33,6 @@ jobs:
 
       - name: Archive
         run: |
-          set -o pipefail
           xcodebuild archive \
             -project voltapeak_batch.xcodeproj \
             -scheme "$scheme" \
@@ -38,7 +40,7 @@ jobs:
             -destination 'generic/platform=macOS' \
             -archivePath build/voltapeak_batch.xcarchive \
             CODE_SIGN_IDENTITY="-" \
-            CODE_SIGN_STYLE=Manual | xcpretty
+            CODE_SIGN_STYLE=Manual
 
       - name: Package .app into zip
         run: |
