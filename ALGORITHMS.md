@@ -1,124 +1,265 @@
 # Algorithmes numériques
 
-Ce document détaille les algorithmes utilisés et leur correspondance avec la
-référence Python (`scipy`, `numpy`, `pybaselines`). Tous les paramètres sont
-identiques à ceux de
-[`voltapeak_batch`](https://github.com/scadinot/voltapeak_batch) (Python) et
-de [`voltapeakApp`](https://github.com/scadinot/voltapeakApp) (Swift
-mono-fichier, déjà validé à la 6ᵉ décimale).
+Ce document détaille les algorithmes mathématiques utilisés dans
+`voltapeak_batchApp` et leur correspondance avec la référence Python
+(`scipy`, `numpy`, `pybaselines`).
+
+Le pipeline d'analyse (sections 1-7) est strictement **identique** à celui
+de [`voltapeakApp`](https://github.com/scadinot/voltapeakApp), validé
+bit-exact à la 6ᵉ décimale contre la référence Python. Les paramètres sont
+hérités de [`voltapeak_batch`](https://github.com/scadinot/voltapeak_batch)
+(Python). Les sections 8 et 9 décrivent l'orchestration propre au batch :
+exports par fichier et agrégation multi-électrodes.
 
 ## 1. Lecture du fichier SWV
 
 **Implémentation :** `SWVFileReader.readFile(at:config:)`
 
-- **Encodage** : ISO Latin-1.
+- **Encodage** : ISO Latin-1 (les potentiostats francophones produisent des entêtes avec accents)
 - **Format attendu** :
   ```
-  [Entête - 1 ligne, ignorée]
+  [Entête — 1 ligne, ignorée]
   potentiel<sep>courant
   potentiel<sep>courant
   ...
   ```
-- **Séparateurs configurables** : tabulation, virgule, point-virgule, espace.
-- **Décimale configurable** : point ou virgule.
-- **Filtrage anticipé** : les lignes à courant nul sont écartées dès la
-  lecture (`current != 0`).
+- **Séparateurs configurables** : tabulation, virgule, point-virgule, espace
+- **Décimale configurable** : point ou virgule
+- **Filtrage anticipé** : les lignes à courant nul sont écartées dès la lecture. L'équivalence avec la référence Python tient au fait que celle-ci applique le même filtre, plus tard, dans `processData` ; les opérations en aval (tri, indices, taille `n` utilisée dans `lam = 1e3·n²`, marges `floor(n × marginRatio)`, gradient non-uniforme) ne dépendent que de l'ensemble final des points retenus, pas de l'étape où le filtre est appliqué.
 
 ## 2. Traitement des données
 
 **Implémentation :** `SWVFileReader.processData(_:)`
 
-1. **Tri** par potentiel croissant.
-2. **Inversion de signe** du courant : `signal = -current` (convention SWV
-   cathodique → pic en maximum).
+Trois opérations en chaîne :
 
-Sortie : `(potentials: [Double], currents: [Double])`, alignés et triés.
+1. **Tri** par potentiel croissant (le fichier peut être en scan retour)
+2. **Inversion de signe** du courant : `signal = -current`
+   - Convention SWV cathodique : le courant mesuré est négatif
+   - L'inversion permet à `argmax` de trouver le sommet du pic comme un maximum
+3. **Pas de filtrage** ici (déjà fait dans `readFile`)
+
+Sortie : `(potentials: [Double], signal: [Double])`, tableaux alignés et triés.
 
 ## 3. Lissage Savitzky-Golay
 
 **Implémentation :** `SavitzkyGolay.filter(_:windowLength:polynomialOrder:)`
 
-Équivalent strict de `scipy.signal.savgol_filter(signal, 11, 2, mode='interp')`.
+Équivalent strict à `scipy.signal.savgol_filter(signal, 11, 2, mode='interp')`.
 
-### Coefficients
+### Principe
 
-- **Intérieur (indices 5..n-6)** : convolution centrée avec
-  `[−36, 9, 44, 69, 84, 89, 84, 69, 44, 9, −36] / 429` (somme = 1).
-- **Bords (5 premiers et 5 derniers points)** : 10 jeux de coefficients
-  `savgol_coeffs(11, 2, pos=p, use='dot')` codés en dur dans
-  `SavitzkyGolay.boundaryCoeffs[p]` pour `p ∈ {0,1,2,3,4,6,7,8,9,10}`.
+Pour chaque point, on ajuste localement un polynôme de degré 2 (parabole) sur
+une fenêtre de 11 points et on évalue ce polynôme à la position centrale. Cela
+atténue le bruit haute fréquence tout en préservant la position et l'amplitude
+du pic.
+
+### Coefficients centraux (mode `dot`, position 5, symétrique)
+
+Pour les points où une fenêtre complète est disponible (indices `5..n-6`), la
+convolution centrée utilise :
+
+```
+coeffs = [−36, 9, 44, 69, 84, 89, 84, 69, 44, 9, −36] / 429
+```
+
+Somme = `429 / 429 = 1` (préservation des constantes).
+
+### Bords : mode `'interp'`
+
+Aux bords du signal (5 premiers et 5 derniers points), scipy mode `'interp'`
+n'extrapole pas mais ajuste un polynôme de degré 2 sur les 11 premiers (resp.
+derniers) points et évalue ce polynôme à la position du point cherché.
+
+Cela donne **10 jeux de coefficients spécifiques** pour `pos ∈ {0, 1, 2, 3, 4, 6, 7, 8, 9, 10}`
+— obtenus avec `scipy.signal.savgol_coeffs(11, 2, pos=p, use='dot')` et codés
+en dur dans `SavitzkyGolay.boundaryCoeffs`.
+
+### Référence
+
+Savitzky, A., & Golay, M. J. E. (1964). *Smoothing and Differentiation of Data
+by Simplified Least Squares Procedures*. **Analytical Chemistry**, 36(8),
+1627-1639.
 
 ## 4. Détection de pic
 
 **Implémentation :** `SignalProcessing.detectPeak(signal:potentials:marginRatio:maxSlope:)`
 
-- **Marge** : `marginRatio = 0.10` → ignore les 10 % des deux côtés.
-- **Filtre de pente** : `maxSlope = 500` → écarte les points dont la pente
-  locale `|dI/dV|` dépasse le seuil.
-- **Gradient** : `gradient(y, x)` reproduit `numpy.gradient(y, x)` avec
-  différences finies 1ᵉʳ ordre aux bords et différences centrées 2ᵉ ordre
-  non-uniformes à l'intérieur.
-
-Appliqué deux fois dans le pipeline batch :
+Appliquée deux fois dans le pipeline batch :
 1. sur le signal lissé pour positionner la zone d'exclusion asPLS,
 2. sur le signal corrigé pour la valeur finale retenue.
 
-## 5. Baseline asPLS (Zhang 2020)
+### Étape 1 : exclusion des bords
 
-**Implémentation :** `WhittakerASPLS.aspls(...)`
+`margin = floor(n × marginRatio)` (avec `marginRatio = 0.10` par défaut, soit 10 %)
 
-Équivalent strict de `pybaselines.whittaker.aspls`.
+La recherche du pic se fait uniquement dans `signal[margin ..< n-margin]`. Cela
+évite de détecter les artefacts de démarrage/arrêt du potentiostat.
 
-### Paramètres utilisés par le pipeline batch
+### Étape 2 : filtre de pente (optionnel)
 
-| Paramètre | Valeur | Notes |
-|---|---|---|
-| `lam` | `1e3 · n²` | rigidité ; mise à l'échelle par n² (densité indépendante) |
-| `diffOrder` | 2 | différences secondes |
-| `tol` | 1e-2 | convergence sur le changement relatif des poids |
-| `maxIter` | 25 | nombre maximal d'itérations |
-| `asymmetricCoef` | 0.5 | coefficient k du papier asPLS |
-| `weights` initiaux | 1.0 partout, **0.001** dans la zone d'exclusion |
+`maxSlope` est de type `Double?` ; le pipeline batch le fixe à `500` par
+défaut, mais passer `nil` désactive entièrement cette étape (cas couvert par
+les tests). Quand il est fourni, on calcule le gradient numérique et on ne
+garde comme candidats que les indices où `|gradient| < maxSlope`.
 
-### Zone d'exclusion
+### Gradient numpy 2ᵉ ordre non-uniforme
 
-```swift
-let exclusionWidthRatio = 0.03
-let exclusionWidth = exclusionWidthRatio * (potentials.last! - potentials.first!)
-let min = peakPotential - exclusionWidth
-let max = peakPotential + exclusionWidth
+`numpy.gradient(y, x)` utilise pour les pas non-uniformes (intérieur) :
+
+```
+hd = x[i] − x[i−1]                                 (pas gauche)
+hs = x[i+1] − x[i]                                  (pas droite)
+grad[i] = −hs / (hd·(hd+hs)) · y[i−1]
+       + (hs − hd) / (hd·hs) · y[i]
+       + hd / (hs·(hd+hs)) · y[i+1]
 ```
 
-### Cœur de l'algorithme
+Aux bords : différence finie 1ᵉʳ ordre (`grad[0] = (y[1]−y[0])/(x[1]−x[0])`,
+`grad[n−1]` symétrique).
 
-À chaque itération `i` :
+Cette formulation est plus précise que la simple différence centrée
+`(y[i+1]−y[i−1])/(x[i+1]−x[i−1])` quand les pas ne sont pas égaux.
 
-1. Construction de `lhs = diag(α) · (λ · D^T D)` puis `lhs[diag] += w`.
-2. Résolution `lhs · baseline = w · y` par élimination de Gauss avec
-   pivotage partiel (matrice non-symétrique → pas de Cholesky).
-3. Résidus `r = y - baseline`.
-4. Si `card(r < 0) < 2` → exit_early (comme pybaselines).
-5. `σ = std(r[r<0], ddof=1)` ; si `σ = 0` → break.
-6. Nouveaux poids : `w_new[i] = 1 / (1 + exp((k/σ) · (r[i] - σ)))`.
-7. Convergence : `|w - w_new|₁ / |w_new|₁ < tol` → break.
-8. Sinon : `w ← w_new`, `α[i] = |r[i]| / max(|r|)`.
+### Étape 3 : argmax
 
-### Construction de `D^T D`
+Parmi les candidats (filtrés ou pas), `argmax(signal)` donne l'indice du
+sommet. Si aucun candidat ne passe le filtre, le premier point de la zone de
+recherche est retourné (repli défensif).
 
-`D` matrice de différences secondes de taille `(n-2) × n`. Le produit
-`D^T D` est pentadiagonal et est construit directement par
-`WhittakerASPLS.buildDTD(n:diffOrder:)`.
+### Référence
+
+Documentation numpy : `numpy.gradient` — *second order accurate central differences in the interior points*.
+
+## 5. Estimation de baseline asPLS (Zhang 2020)
+
+**Implémentation :** `WhittakerASPLS.aspls(y:lam:diffOrder:maxIter:tol:weights:alpha:asymmetricCoef:)`
+
+Équivalent strict à `pybaselines.whittaker.aspls`.
+
+### Principe
+
+L'asPLS (**a**daptive **s**moothness **p**enalized **l**east **s**quares)
+ajuste une courbe lisse sous le signal en minimisant :
+
+```
+Σᵢ wᵢ · (yᵢ − zᵢ)² + λ · z^T · D^T · diag(α) · D · z
+```
+
+où :
+- `y` est le signal (lissé) d'entrée
+- `z` est la baseline cherchée
+- `w` est le vecteur des poids (chaque point pondéré séparément)
+- `D` matrice de différences finies d'ordre 2 (pénalise la courbure)
+- `α` vecteur de pénalité adaptative locale (clé de l'asPLS)
+- `λ` paramètre de lissage global
+
+### Système linéaire résolu à chaque itération
+
+En notant `W = diag(w)`, la condition de stationnarité s'écrit :
+
+```
+(W + λ · diag(α) · D^T·D) · z = W · y
+```
+
+⚠️ La matrice **n'est pas symétrique** à cause de `diag(α)` à gauche (et pas
+`D^T·diag(α)·D` comme dans certaines présentations du papier). Cette forme
+reproduit exactement `pybaselines` qui multiplie le penalty banded par alpha
+par broadcast. Le solveur Swift utilise une élimination de Gauss avec
+pivotage partiel (`solveFallback`), pas une décomposition de Cholesky.
+
+`D^T·D` est pentadiagonal (différences d'ordre 2) ; il est construit
+directement par un helper interne (`buildDTD(n:diffOrder:)` dans
+`WhittakerASPLS`, non exposé publiquement).
+
+### Mise à jour itérative
+
+À chaque itération :
+
+1. **Solve** : `z = solveFallback(A, w·y)` où `A = W + λ·diag(α)·D^T·D`
+2. **Résidus** : `d = y − z`
+3. **Sortie anticipée** : si `card(d < 0) < 2`, on arrête (comme `pybaselines`)
+4. **Mise à jour des poids** (sigmoïde) :
+   ```
+   neg = d[d < 0]
+   σ = std(neg, ddof=1)
+   w_new[i] = expit(−(k/σ) · (d[i] − σ))  =  1 / (1 + exp((k/σ)·(d[i] − σ)))
+   ```
+   où `k = asymmetric_coef = 0.5` (défaut pybaselines). Si `σ = 0`, on arrête.
+5. **Convergence** : si `Σ|w − w_new| / Σ|w_new| < tol`, on s'arrête.
+6. **Mise à jour de α** :
+   ```
+   α[i] = |d[i]| / max(|d|)
+   ```
+   Les points à fort résidu (pic) reçoivent un α proche de 1 → pénalité forte
+   → la baseline reste lisse à cet endroit. Les points à faible résidu (zone
+   baseline) ont α proche de 0 → pénalité faible → la baseline suit le
+   signal.
+
+### Paramètres utilisés
+
+| Paramètre | Valeur | Origine |
+|---|---|---|
+| `lam` (lissage) | `1e3 × n²` | Mise à l'échelle empirique du Python (voltapeak.py) |
+| `asymmetric_coef` (k) | `0.5` | Défaut pybaselines |
+| `tol` | `1e-2` | Voltapeak Python |
+| `max_iter` | `25` | Voltapeak Python |
+| `diff_order` | `2` | Défaut |
+
+### Zone d'exclusion autour du pic
+
+Avant l'appel à `aspls`, le pipeline batch construit un vecteur de poids
+initiaux :
+
+```swift
+weights = [Double](repeating: 1.0, count: n)
+exclusionWidth = 0.03 × (potentials.last − potentials.first)
+for i où potentials[i] ∈ [xPeak − exclusionWidth, xPeak + exclusionWidth]:
+    weights[i] = 0.001
+```
+
+Cela évite que la baseline ne « remonte » vers le sommet du pic dès la
+première itération. Le sigmoid update prend ensuite le relais pour maintenir
+les poids bas dans cette zone.
+
+### Référence
+
+Zhang, F., Tang, X., Tong, A., Wang, B., & Wang, J. (2020). *Baseline
+correction for infrared spectra using adaptive smoothness parameter penalized
+least squares method*. **Spectroscopy Letters**, 53(3), 222-233.
+
+Implémentation Python de référence : [`pybaselines.whittaker.aspls`](https://github.com/derb12/pybaselines).
+
+### asPLS vs asLS — différence essentielle
+
+| Aspect | asLS (Eilers 2005) | asPLS (Zhang 2020) |
+|---|---|---|
+| Pénalité | constante `λ` partout | adaptative `λ · α[i]` |
+| Poids | binaire : `p` si `y > z`, `1−p` sinon | sigmoïde basée sur `std(résidus négatifs)` |
+| Convergence | sur la baseline | sur les poids |
+| Paramètre clé | `p` (asymétrie, ~0.01) | `k` (asymmetric_coef, 0.5) |
+
+Une version précédente du port Swift implémentait **asLS** (par erreur). Le
+résultat divergeait de ~22 % du Python. Le port actuel reproduit asPLS
+exactement.
 
 ## 6. Signal corrigé
 
-```swift
-let corrected = zip(smoothed, baseline).map { $0 - $1 }
 ```
+corrected[i] = smoothed[i] − baseline[i]
+```
+
+Opération élément par élément, triviale.
 
 ## 7. Re-détection du pic
 
-Même fonction qu'à l'étape 4, appliquée sur `corrected`. La valeur retenue
-pour le récapitulatif est `(correctedPeakPotential, correctedPeakCurrent)`.
+Le pic final est obtenu en réappliquant `detectPeak` sur le signal corrigé. La
+position du pic peut légèrement changer par rapport à la détection brute
+(étape 4) — le signal corrigé étant plus « net » sans la dérive de la
+baseline.
+
+C'est cette deuxième détection (potentiel + courant corrigé) qui est retenue
+pour la ligne du classeur Excel agrégé final (§9).
 
 ## 8. Sorties par fichier
 
@@ -140,6 +281,35 @@ pour le récapitulatif est `(correctedPeakPotential, correctedPeakCurrent)`.
 4. La colonne `Charge (C)` contient la **formule Excel**
    `=<courantCol><row>/<freqCol><row>` (calculée par Excel à l'ouverture).
 5. La colonne `Fréq (Hz)` est en position B avec la valeur 50.0 par défaut.
+
+## Pseudocode du pipeline complet pour un fichier
+
+> Le pseudocode adopte la nomenclature Python/pybaselines (`lam`, `weights`,
+> `max_iter`, `tol`, `k`) par souci de lisibilité ; la signature Swift
+> correspondante est
+> `WhittakerASPLS.aspls(y:lam:diffOrder:maxIter:tol:weights:alpha:asymmetricCoef:)`
+> (cf. §5, où `k` désigne `asymmetric_coef` / `asymmetricCoef`).
+
+```
+read SWV file → DataFrame
+processData → potentials[], signal[]   # tri + inversion signe
+
+smoothed = savgol_filter(signal, 11, 2, mode='interp')
+
+(xPeak, _) = detectPeak(smoothed, potentials, margin=0.10, maxSlope=500)
+
+weights = ones(n)
+weights[ potentials ∈ [xPeak ± 0.03·range] ] = 0.001
+baseline = aspls(smoothed, lam=1e3·n², weights=weights, max_iter=25, tol=1e-2, k=0.5)
+
+corrected = smoothed − baseline
+
+(xFinal, yFinal) = detectPeak(corrected, potentials, margin=0.10, maxSlope=500)
+```
+
+Exécuté pour chaque fichier ; les exports par fichier (§8) sont produits
+dans la foulée, et les couples `(xFinal, yFinal)` collectés alimentent
+l'agrégation multi-électrodes (§9).
 
 ## Parité avec la version Python
 
