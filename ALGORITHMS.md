@@ -4,12 +4,13 @@ Ce document détaille les algorithmes mathématiques utilisés dans
 `voltapeak_batchApp` et leur correspondance avec la référence Python
 (`scipy`, `numpy`, `pybaselines`).
 
-Le pipeline d'analyse (sections 1-7) est strictement **identique** à celui
-de [`voltapeakApp`](https://github.com/scadinot/voltapeakApp), validé
-bit-exact à la 6ᵉ décimale contre la référence Python. Les paramètres sont
-hérités de [`voltapeak_batch`](https://github.com/scadinot/voltapeak_batch)
-(Python). Les sections 8 et 9 décrivent l'orchestration propre au batch :
-exports par fichier et agrégation multi-électrodes.
+Le pipeline d'analyse (sections 1-7) est strictement **identique** à
+celui de [`voltapeakApp`](https://github.com/scadinot/voltapeakApp),
+validé bit-exact à la 6ᵉ décimale contre la référence Python. Les
+paramètres sont hérités de
+[`voltapeak_batch`](https://github.com/scadinot/voltapeak_batch)
+(Python). Les sections 8 et 9 décrivent l'orchestration propre au
+batch : exports par fichier et agrégation multi-électrodes.
 
 ## 1. Lecture du fichier SWV
 
@@ -85,7 +86,8 @@ by Simplified Least Squares Procedures*. **Analytical Chemistry**, 36(8),
 
 **Implémentation :** `SignalProcessing.detectPeak(signal:potentials:marginRatio:maxSlope:)`
 
-Appliquée deux fois dans le pipeline batch :
+Appliquée deux fois dans le pipeline :
+
 1. sur le signal lissé pour positionner la zone d'exclusion asPLS,
 2. sur le signal corrigé pour la valeur finale retenue.
 
@@ -98,10 +100,10 @@ La recherche du pic se fait uniquement dans `signal[margin ..< n-margin]`. Cela
 
 ### Étape 2 : filtre de pente (optionnel)
 
-`maxSlope` est de type `Double?` ; le pipeline batch le fixe à `500` par
-défaut, mais passer `nil` désactive entièrement cette étape (cas couvert par
-les tests). Quand il est fourni, on calcule le gradient numérique et on ne
-garde comme candidats que les indices où `|gradient| < maxSlope`.
+`maxSlope` est de type `Double?` ; le pipeline le fixe à `500` par défaut,
+mais passer `nil` désactive entièrement cette étape (cas couvert par les
+tests). Quand il est fourni, on calcule le gradient numérique et on ne garde
+comme candidats que les indices où `|gradient| < maxSlope`.
 
 ### Gradient numpy 2ᵉ ordre non-uniforme
 
@@ -208,8 +210,8 @@ directement par un helper interne (`buildDTD(n:diffOrder:)` dans
 
 ### Zone d'exclusion autour du pic
 
-Avant l'appel à `aspls`, le pipeline batch construit un vecteur de poids
-initiaux :
+Avant l'appel à `aspls`, `BatchProcessor.process` construit un vecteur de
+poids initiaux :
 
 ```swift
 weights = [Double](repeating: 1.0, count: n)
@@ -258,8 +260,8 @@ position du pic peut légèrement changer par rapport à la détection brute
 (étape 4) — le signal corrigé étant plus « net » sans la dérive de la
 baseline.
 
-C'est cette deuxième détection (potentiel + courant corrigé) qui est retenue
-pour la ligne du classeur Excel agrégé final (§9).
+C'est cette deuxième détection (potentiel + courant corrigé) qui est
+retenue pour la ligne du classeur Excel agrégé final (§9).
 
 ## 8. Sorties par fichier
 
@@ -284,9 +286,9 @@ pour la ligne du classeur Excel agrégé final (§9).
 
 ## Pseudocode du pipeline complet pour un fichier
 
-> Le pseudocode adopte la nomenclature Python/pybaselines (`lam`, `weights`,
-> `max_iter`, `tol`, `k`) par souci de lisibilité ; la signature Swift
-> correspondante est
+> Le pseudocode adopte la nomenclature Python/pybaselines (`lam`,
+> `weights`, `max_iter`, `tol`, `k`) par souci de lisibilité ; la
+> signature Swift correspondante est
 > `WhittakerASPLS.aspls(y:lam:diffOrder:maxIter:tol:weights:alpha:asymmetricCoef:)`
 > (cf. §5, où `k` désigne `asymmetric_coef` / `asymmetricCoef`).
 
@@ -313,7 +315,10 @@ l'agrégation multi-électrodes (§9).
 
 ## Parité avec la version Python
 
-Toutes les valeurs numériques (paramètres, seuils, ordres) sont **strictement
-identiques** à `voltapeak_batch/__main__.py`. La validation à la 6ᵉ décimale
-de l'implémentation `voltapeakApp` ([VALIDATION.md de voltapeakApp](https://github.com/scadinot/voltapeakApp/blob/main/VALIDATION.md))
-s'applique directement puisque les fonctions sont reprises sans modification.
+Toutes les valeurs numériques (paramètres, seuils, ordres) sont
+**strictement identiques** à la version Python source
+([`voltapeak_batch`](https://github.com/scadinot/voltapeak_batch)). La
+validation à la 6ᵉ décimale de l'implémentation `voltapeakApp`
+([voltapeakApp/VALIDATION.md](https://github.com/scadinot/voltapeakApp/blob/main/VALIDATION.md))
+s'applique directement puisque les fonctions sont reprises sans
+modification.
