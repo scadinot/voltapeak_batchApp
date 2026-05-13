@@ -5,9 +5,6 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   build:
     name: Archive unsigned .app and upload as artifact
@@ -36,20 +33,12 @@ jobs:
             -destination 'generic/platform=macOS' \
             -archivePath build/voltapeak_batch.xcarchive \
             CODE_SIGN_IDENTITY="-" \
-            CODE_SIGN_STYLE=Manual
+            CODE_SIGN_STYLE=Manual | xcpretty
+          exit ${PIPESTATUS[0]}
 
-      # `ditto` est utilisé plutôt qu'un `zip` standard pour préserver le bit
-      # exécutable et les attributs étendus du bundle .app (Contents/MacOS/...).
-      # actions/upload-artifact@v4 effectue son propre zip qui peut altérer
-      # ces métadonnées Unix.
-      - name: Package .app with ditto
-        run: |
-          cd build/voltapeak_batch.xcarchive/Products/Applications
-          ditto -c -k --keepParent voltapeak_batch.app "$GITHUB_WORKSPACE/voltapeak_batch.zip"
-
-      - name: Upload .app archive as artifact
+      - name: Upload .app as artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.scheme }}-unsigned-${{ github.sha }}
-          path: voltapeak_batch.zip
+          path: build/voltapeak_batch.xcarchive/Products/Applications
           if-no-files-found: error
