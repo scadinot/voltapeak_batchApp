@@ -96,10 +96,12 @@ Appliquée deux fois dans le pipeline batch :
 La recherche du pic se fait uniquement dans `signal[margin ..< n-margin]`. Cela
 évite de détecter les artefacts de démarrage/arrêt du potentiostat.
 
-### Étape 2 : filtre de pente
+### Étape 2 : filtre de pente (optionnel)
 
-Si `maxSlope` est fourni (500 par défaut), on calcule le gradient numérique et
-on ne garde comme candidats que les indices où `|gradient| < maxSlope`.
+`maxSlope` est de type `Double?` ; le pipeline batch le fixe à `500` par
+défaut, mais passer `nil` désactive entièrement cette étape (cas couvert par
+les tests). Quand il est fourni, on calcule le gradient numérique et on ne
+garde comme candidats que les indices où `|gradient| < maxSlope`.
 
 ### Gradient numpy 2ᵉ ordre non-uniforme
 
@@ -166,8 +168,9 @@ reproduit exactement `pybaselines` qui multiplie le penalty banded par alpha
 par broadcast. Le solveur Swift utilise une élimination de Gauss avec
 pivotage partiel (`solveFallback`), pas une décomposition de Cholesky.
 
-`D^T·D` est pentadiagonal (différences d'ordre 2) et construit directement
-par `WhittakerASPLS.buildDTD(n:diffOrder:)`.
+`D^T·D` est pentadiagonal (différences d'ordre 2) ; il est construit
+directement par un helper interne (`buildDTD(n:diffOrder:)` dans
+`WhittakerASPLS`, non exposé publiquement).
 
 ### Mise à jour itérative
 
