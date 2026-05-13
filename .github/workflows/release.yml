@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      # Filtres : `v[0-9]*` matche `v1`, `v1.0.0`, `v2026-05-13` ; `[0-9]*`
+      # matche un tag commençant par un chiffre (`1.0.0`, `2026.05`). Refuse
+      # explicitement les variantes type `v-test`, `valpha` etc.
+      - 'v[0-9]*'
+      - '[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, package and publish release
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect scheme
+        run: |
+          default=$(xcodebuild -list -json | ruby -e "require 'json'; puts JSON.parse(STDIN.read)['project']['schemes'][0]")
+          if [ -z "$default" ]; then
+            echo "::error::No Xcode scheme detected."
+            exit 1
+          fi
+          echo "scheme=$default" >> "$GITHUB_ENV"
+          echo "Using scheme: $default"
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -project voltapeak_batch.xcodeproj \
+            -scheme "$scheme" \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath build/voltapeak_batch.xcarchive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual
+
+      - name: Package .app into zip
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          cd build/voltapeak_batch.xcarchive/Products/Applications
+          ditto -c -k --keepParent voltapeak_batch.app "$GITHUB_WORKSPACE/voltapeak_batch-${TAG}.zip"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "ASSET=voltapeak_batch-${TAG}.zip" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — uploading asset (with --clobber)."
+            gh release upload "$TAG" "$ASSET" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            echo "Creating release $TAG."
+            gh release create "$TAG" \
+              --title "voltapeak_batch $TAG" \
+              --generate-notes \
+              --repo "$GITHUB_REPOSITORY" \
+              "$ASSET"
+          fi
