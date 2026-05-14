@@ -2,13 +2,13 @@
 
 Guide à l'attention des contributeurs souhaitant faire évoluer
 `voltapeak_batchApp`. Pour la **méthodologie de validation**, voir
-[VALIDATION.md](VALIDATION.md). Pour les **détails algorithmiques**, voir
-[ALGORITHMS.md](ALGORITHMS.md).
+[VALIDATION.md](VALIDATION.md). Pour les **détails algorithmiques**,
+voir [ALGORITHMS.md](ALGORITHMS.md).
 
 Les fonctions d'analyse de cette app sont **reprises à l'identique** de
-[`voltapeakApp`](https://github.com/scadinot/voltapeakApp), qui en est la
-**référence canonique**. Toute modification numérique se fait là-bas en
-premier et est propagée ici sans changement (cf. § « Mise à jour des
+[`voltapeakApp`](https://github.com/scadinot/voltapeakApp), qui en est
+la **référence canonique**. Toute modification numérique se fait là-bas
+en premier et est propagée ici sans changement (cf. § « Mise à jour des
 fonctions d'analyse »).
 
 ## Prérequis
@@ -16,8 +16,8 @@ fonctions d'analyse »).
 | Outil | Version |
 |---|---|
 | **macOS** | 26.1+ (Tahoe) |
-| **Xcode** | 26.2+ (`objectVersion = 77`, `MACOSX_DEPLOYMENT_TARGET = 26.1`) |
-| **Python** (uniquement pour validation croisée) | 3.11+ avec `numpy`, `scipy`, `pybaselines`, `pandas`, `matplotlib` |
+| **Xcode** | 26+ |
+| **Python** (uniquement pour validation) | 3.11+ avec `numpy`, `scipy`, `pybaselines`, `pandas`, `matplotlib` |
 
 Toutes les bibliothèques Swift utilisées proviennent du SDK macOS
 (`SwiftUI`, `Charts`, `Foundation`, `AppKit`, `Observation`). **Aucun
@@ -86,7 +86,7 @@ voltapeak_batchApp/                  # racine du dépôt
 | Organisation interne | Sections `// MARK: - Section` pour la navigation Xcode |
 | Documentation d'API | Triple-slash `///` avec balises `- Parameters`, `- Returns`, `- Throws` |
 | Acronymes scientifiques | Conservés en minuscules : `aspls`, `savgol`, etc. |
-| Actor isolation | `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` — le code CPU-bound utilise explicitement `Task.detached(...)`. |
+| Actor isolation | `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` dans le pbxproj. Le code CPU-bound utilise explicitement `Task.detached(...)`. |
 
 Les fichiers Swift sont écrits en français pour la cohérence avec l'UI
 et les commentaires existants. C'est un projet francophone assumé.
@@ -105,8 +105,8 @@ etc.) sont définies dans `BatchProcessor.process(...)` et
 
 ### Exemple : nouvelle colonne dans le récapitulatif
 
-`BatchAggregator.writeSummary(...)` construit les colonnes par électrode.
-Pour en ajouter une (ex. *Largeur à mi-hauteur*) :
+`BatchAggregator.writeSummary(...)` construit les colonnes par
+électrode. Pour en ajouter une (ex. *Largeur à mi-hauteur*) :
 
 1. Étendre `BatchFileResult` avec la nouvelle métrique.
 2. Calculer cette métrique dans `BatchProcessor.process` (à partir du
@@ -152,9 +152,9 @@ Fichiers traités : 24 / 24
 Temps écoulé : 1.42 secondes.
 ```
 
-Pour des détails plus fins, ajouter des `print(...)` dans
-`BatchProcessor.process`. Format recommandé pour la comparaison avec
-`voltapeakApp` / Python :
+Pour des détails plus fins (signal intermédiaire, baseline, etc.),
+ajouter des `print(...)` dans `BatchProcessor.process`. Format
+recommandé pour la comparaison avec `voltapeakApp` / Python :
 
 ```swift
 print("=== aspls DEBUG (Swift) ===")
@@ -177,13 +177,15 @@ divergé dans la copie — voir [VALIDATION.md](VALIDATION.md) §
 
 **État actuel** : aucun test unitaire automatisé. Les fonctions
 d'analyse sont déjà validées dans `voltapeakApp` (bit-exact contre
-Python). La validation propre au batch est manuelle, documentée dans
+Python, cf.
+[voltapeakApp/VALIDATION.md](https://github.com/scadinot/voltapeakApp/blob/main/VALIDATION.md)).
+La validation propre au batch est manuelle, documentée dans
 [VALIDATION.md](VALIDATION.md).
 
 Pistes pour ajouter une cible de tests :
 
-1. **Tests algorithmiques** (priorité faible — déjà validés dans
-   `voltapeakApp`).
+1. **Tests algorithmiques** : priorité faible — déjà couverts par
+   `voltapeakTests` côté `voltapeakApp`.
 2. **Tests d'agrégation** : `BatchAggregator.writeSummary` — ordre des
    électrodes, formules `=I/F` correctement insérées.
 3. **Tests de parsing** : `BatchProcessor.parseBaseAndElectrode` sur des
@@ -207,8 +209,9 @@ O(n³)). Pistes d'optimisation :
 - Vectoriser les boucles via `Accelerate` (`vDSP`, `vForce`).
 - Mettre en cache `D^T·D` pour un `n` constant.
 
-Toute optimisation doit être validée bit-exact contre la version actuelle
-sur le jeu de fixtures avant merge.
+Toute optimisation doit être validée bit-exact contre la version
+actuelle sur le jeu de fixtures (cf. [VALIDATION.md](VALIDATION.md))
+avant merge.
 
 ## Ressources externes
 
