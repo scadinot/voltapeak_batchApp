@@ -89,17 +89,14 @@ struct ContentView: View {
                 }
 
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Traitement parallèle :")
+                    Text("Mode de traitement :")
                         .frame(width: 170, alignment: .leading)
-                    Toggle(isOn: $viewModel.parallelEnabled) {
-                        Text(
-                            viewModel.parallelEnabled
-                            ? "Activé (un processus par cœur)"
-                            : "Désactivé (séquentiel)"
-                        )
+                    Picker("", selection: $viewModel.parallelEnabled) {
+                        Text("Multi-thread (un Task par cœur)").tag(true)
+                        Text("Séquentiel").tag(false)
                     }
-                    .toggleStyle(.switch)
-                    Spacer()
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
             }
             .padding(8)
