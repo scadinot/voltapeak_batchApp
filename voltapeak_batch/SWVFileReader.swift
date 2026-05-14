@@ -8,7 +8,7 @@
 import Foundation
 
 /// Lecteur de fichiers de voltampérométrie SWV
-enum SWVFileReader {
+nonisolated enum SWVFileReader {
 
     enum FileError: LocalizedError {
         case fileNotFound
