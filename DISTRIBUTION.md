@@ -14,7 +14,7 @@ Dans Xcode, onglet **Signing & Capabilities** :
 
 ```
 Team               : votre équipe Apple (pour notarisation seulement)
-Bundle Identifier  : com.cadinot.voltapeak-batch
+Bundle Identifier  : com.cadinot.voltapeak_batch
 
 App Sandbox        : désactivé
 ```
@@ -22,9 +22,9 @@ App Sandbox        : désactivé
 Pour les versions distribuables, vérifier dans le pbxproj :
 
 ```
-MARKETING_VERSION             = 1.0.0
+MARKETING_VERSION             = 1.0
 CURRENT_PROJECT_VERSION       = 1
-PRODUCT_BUNDLE_IDENTIFIER     = com.cadinot.voltapeak-batch
+PRODUCT_BUNDLE_IDENTIFIER     = com.cadinot.voltapeak_batch
 MACOSX_DEPLOYMENT_TARGET      = 26.1
 ```
 
@@ -73,7 +73,7 @@ ditto -c -k --keepParent voltapeak_batch.app voltapeak_batch.zip
 hdiutil create -volname "voltapeak_batch" \
                -srcfolder voltapeak_batch.app \
                -ov -format UDZO \
-               voltapeak_batch-1.0.0.dmg
+               voltapeak_batch-1.0.dmg
 ```
 
 ### Limitation : warning au premier lancement
@@ -101,6 +101,13 @@ etc.) sans warning au lancement.
   ```
   ✅ Hardened Runtime
   ```
+- Profil de credentials `notarytool` créé une seule fois :
+  ```bash
+  xcrun notarytool store-credentials AC_PROFILE \
+        --apple-id "<email>" \
+        --team-id "<TEAM_ID>" \
+        --password "<app-specific-password>"
+  ```
 
 ### Étapes
 
@@ -110,22 +117,28 @@ etc.) sans warning au lancement.
    - **Upload** pour notarisation (option par défaut).
    - Apple va signer + scanner + notariser (quelques minutes à quelques
      heures).
-3. **Vérifier** :
+3. **Vérifier l'historique de notarisation** :
    ```bash
-   xcrun notarytool history --apple-id <votre@email.com>
+   xcrun notarytool history --keychain-profile "AC_PROFILE"
    ```
-4. **Agrafer le ticket** :
+4. **Agrafer le ticket** sur le bundle :
    ```bash
    xcrun stapler staple voltapeak_batch.app
    ```
-5. **Créer et agrafer le DMG** :
+5. **Créer, signer, notariser et agrafer le DMG** (le DMG doit être
+   notarisé séparément du `.app`) :
    ```bash
    hdiutil create -volname "voltapeak_batch" -srcfolder voltapeak_batch.app \
-                  -ov -format UDZO voltapeak_batch-1.0.0.dmg
-   xcrun stapler staple voltapeak_batch-1.0.0.dmg
+                  -ov -format UDZO voltapeak_batch-1.0.dmg
+   codesign --force --options runtime --timestamp \
+            --sign "Developer ID Application: <Votre nom> (<TEAM_ID>)" \
+            voltapeak_batch-1.0.dmg
+   xcrun notarytool submit voltapeak_batch-1.0.dmg \
+         --keychain-profile "AC_PROFILE" --wait
+   xcrun stapler staple voltapeak_batch-1.0.dmg
    ```
 
-Résultat : `voltapeak_batch-1.0.0.dmg` notarisé, lancé sans warning sur
+Résultat : `voltapeak_batch-1.0.dmg` notarisé, lancé sans warning sur
 n'importe quel Mac.
 
 ### Alternative ligne de commande
@@ -149,15 +162,6 @@ xcrun notarytool submit voltapeak_batch.zip \
 
 # Agrafer le ticket dans le bundle
 xcrun stapler staple voltapeak_batch.app
-```
-
-La création de `AC_PROFILE` se fait une seule fois :
-
-```bash
-xcrun notarytool store-credentials AC_PROFILE \
-      --apple-id "<email>" \
-      --team-id "<TEAM_ID>" \
-      --password "<app-specific-password>"
 ```
 
 ---
@@ -184,6 +188,7 @@ spctl -a -vv -t install voltapeak_batch.app
 | « voltapeak_batch.app est endommagé » | Attributs de quarantaine après téléchargement | `xattr -cr voltapeak_batch.app` |
 | Warning « développeur non identifié » | App non notarisée | Clic droit → Ouvrir, ou notariser (option 2) |
 | `notarytool` échoue | Compte Developer non actif / mot de passe d'app | Régénérer mot de passe d'app sur appleid.apple.com |
+| `stapler staple` du DMG échoue (« No ticket found ») | DMG non soumis à `notarytool submit` avant agrafage | Soumettre le DMG après l'avoir signé (cf. Option 2 §5) |
 | L'app crashe sur d'autres Macs | macOS minimum incompatible | L'app exige macOS 26.1+ à cause de l'API et du framework Charts |
 
 ---
@@ -211,13 +216,16 @@ spctl -a -vv -t install voltapeak_batch.app
 
 ## Versioning
 
-- `MARKETING_VERSION` (version publique, ex. `1.0.0`) : modifiée dans
-  `project.pbxproj`.
+- `MARKETING_VERSION` (version publique, ex. `1.0` — valeur actuelle
+  dans `project.pbxproj`) : modifiée à chaque release.
 - `CURRENT_PROJECT_VERSION` (build number, ex. `1`) : incrémentée à
   chaque release.
 - Mise à jour de [CHANGELOG.md](CHANGELOG.md) à chaque release.
-- Tag git annoté : `git tag -a v1.0.0 -m "Release 1.0.0"` puis
-  `git push origin v1.0.0`.
+- Tag git annoté : `git tag -a v1.0 -m "Release 1.0"` puis
+  `git push origin v1.0`.
+
+Le tag (`v1.0`), `MARKETING_VERSION` (`1.0`) et le
+`CFBundleShortVersionString` de `Info.plist` doivent rester cohérents.
 
 ---
 
