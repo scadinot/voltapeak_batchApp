@@ -201,13 +201,22 @@ nom suggéré `voltapeak_batchTests`, framework Swift Testing ou XCTest.
 
 ## Profiling
 
-L'asPLS est l'étape la plus coûteuse (élimination de Gauss dense
-O(n³)). Pistes d'optimisation :
+L'asPLS exploite la structure pentadiagonale de `diag(α)·(λ·D^T·D)
++ diag(w)` via un solveur banded LAPACK (`Accelerate.dgbsv_`),
+KL=KU=2. Complexité O(n) au lieu de O(n³). Sur un fichier à
+6 600 points effectifs, le solveur est passé de ~24 min/fichier
+(Gauss dense) à ~25 ms/fichier (banded), gain ~50 000×.
 
-- Exploiter la structure pentadiagonale de `D^T·D` via un solveur de
-  bandes (LAPACK `dgbsv`) — gain potentiel ~10× sur n grand.
-- Vectoriser les boucles via `Accelerate` (`vDSP`, `vForce`).
-- Mettre en cache `D^T·D` pour un `n` constant.
+Garde-fou : `WhittakerASPLS.maxN = 200 000`. Les callers
+(`BatchProcessor.process`, équivalents loops et voltapeakApp)
+refusent les fichiers au-delà avec `FileError.tooManyPoints`.
+
+Pistes d'optimisation restantes (non critiques) :
+
+- Vectoriser les boucles secondaires (résidus, σ, mise à jour des
+  poids) via `Accelerate` (`vDSP`, `vForce`).
+- Mettre en cache le template DTD banded pour un `n` constant entre
+  fichiers (utile pour les campagnes homogènes).
 
 Toute optimisation doit être validée bit-exact contre la version
 actuelle sur le jeu de fixtures (cf. [VALIDATION.md](VALIDATION.md))
