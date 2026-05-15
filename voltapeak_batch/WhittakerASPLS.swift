@@ -51,7 +51,12 @@ nonisolated enum WhittakerASPLS {
         asymmetricCoef: Double = 0.5
     ) -> [Double] {
         let n = y.count
-        precondition(
+        // Garde-fou debug-only. Les callers (`BatchProcessor.process`, etc.)
+        // sont responsables du filtre amont qui remonte une `FileError.tooManyPoints`
+        // dans le journal du batch. En Release, on laisse passer si jamais un
+        // chemin oublie le check : le solveur banded reste tractable bien au-delà
+        // de `maxN`, donc dégradation perf < crash batch.
+        assert(
             n <= maxN,
             "WhittakerASPLS.aspls: signal trop grand (\(n) > \(maxN)). Le caller doit filtrer en amont."
         )
@@ -118,7 +123,16 @@ nonisolated enum WhittakerASPLS {
                     )
                 }
             }
-            precondition(info == 0, "dgbsv_ a échoué : info=\(info)")
+            // dgbsv_ doit retourner info=0 sur matrice non-singulière. Les cas
+            // d'échec sont diagnostiquement séparés : info<0 = bug d'appel (taille
+            // invalide, pointeur null, etc.) ; info>0 = matrice singulière à la
+            // ligne `info` (entrée pathologique : poids/α nuls, NaN/Inf dans y).
+            if info < 0 {
+                fatalError("dgbsv_ : argument invalide à la position \(-info) (bug d'appel interne).")
+            }
+            if info > 0 {
+                fatalError("dgbsv_ : matrice singulière à la ligne \(info) — vérifiez NaN/Inf dans y, ou poids/α extrêmes.")
+            }
             baseline = b
 
             // Résidus
