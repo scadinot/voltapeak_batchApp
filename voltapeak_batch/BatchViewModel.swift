@@ -165,10 +165,18 @@ final class BatchViewModel {
     ) async -> [BatchFileResult] {
         var collected: [BatchFileResult] = []
         for file in txtFiles {
-            if let result = await processOne(
+            let outcome = await Task.detached(priority: .userInitiated) { () -> Result<BatchProcessor.Outcome, Error> in
+                do {
+                    return .success(try BatchProcessor.process(fileURL: file, config: config))
+                } catch {
+                    return .failure(error)
+                }
+            }.value
+
+            if let result = finalize(
                 fileURL: file,
+                outcome: outcome,
                 outputFolder: outputFolder,
-                config: config,
                 export: export
             ) {
                 collected.append(result)
@@ -179,7 +187,12 @@ final class BatchViewModel {
     }
 
     // MARK: - Exécution parallèle
-
+    //
+    // Les tâches du pool ne font QUE le calcul CPU-bound (hors MainActor).
+    // Les écritures (PNG / CSV / XLSX) sont réalisées séquentiellement dans
+    // le drain, sur le MainActor : `ImageRenderer` y est confiné par AppKit
+    // et le séquentialiser évite que N rendus simultanés saturent le pool
+    // autorelease (cf. freeze observé à ~800 fichiers).
     private func runParallel(
         txtFiles: [URL],
         outputFolder: URL,
@@ -189,7 +202,7 @@ final class BatchViewModel {
         let maxConcurrency = max(1, ProcessInfo.processInfo.activeProcessorCount)
         var indexed: [(index: Int, result: BatchFileResult)] = []
 
-        await withTaskGroup(of: (Int, BatchFileResult?).self) { group in
+        await withTaskGroup(of: (Int, URL, Result<BatchProcessor.Outcome, Error>).self) { group in
             var nextIndex = 0
             var running = 0
 
@@ -198,35 +211,39 @@ final class BatchViewModel {
                 let idx = nextIndex
                 let file = txtFiles[idx]
                 group.addTask {
-                    let result = await self.processOne(
-                        fileURL: file,
-                        outputFolder: outputFolder,
-                        config: config,
-                        export: export
-                    )
-                    return (idx, result)
+                    do {
+                        let outcome = try BatchProcessor.process(fileURL: file, config: config)
+                        return (idx, file, .success(outcome))
+                    } catch {
+                        return (idx, file, .failure(error))
+                    }
                 }
                 nextIndex += 1
                 running += 1
             }
 
-            // Drain : à chaque tâche terminée, on en lance une nouvelle
-            while let (idx, result) = await group.next() {
+            // Drain : à chaque tâche terminée, on en lance une nouvelle.
+            // Les écritures se font ici, une à la fois, sur le MainActor.
+            while let (idx, file, outcome) = await group.next() {
                 progressCurrent += 1
-                if let result {
+                if let result = finalize(
+                    fileURL: file,
+                    outcome: outcome,
+                    outputFolder: outputFolder,
+                    export: export
+                ) {
                     indexed.append((idx, result))
                 }
                 if nextIndex < txtFiles.count {
                     let i = nextIndex
-                    let file = txtFiles[i]
+                    let nextFile = txtFiles[i]
                     group.addTask {
-                        let result = await self.processOne(
-                            fileURL: file,
-                            outputFolder: outputFolder,
-                            config: config,
-                            export: export
-                        )
-                        return (i, result)
+                        do {
+                            let outcome = try BatchProcessor.process(fileURL: nextFile, config: config)
+                            return (i, nextFile, .success(outcome))
+                        } catch {
+                            return (i, nextFile, .failure(error))
+                        }
                     }
                     nextIndex += 1
                 }
@@ -237,60 +254,64 @@ final class BatchViewModel {
         return indexed.sorted { $0.index < $1.index }.map(\.result)
     }
 
-    // MARK: - Traitement d'un fichier
+    // MARK: - Finalisation d'un fichier (sur MainActor)
     //
-    // L'API est MainActor. Le `Task.detached(...).value` interne libère le
-    // MainActor pendant le calcul CPU-bound : plusieurs `processOne` en vol
-    // s'exécutent donc en parallèle sur leurs tâches détachées respectives.
-    // PNG / CSV / XLSX et journal restent sur le MainActor (sérialisé).
-    private func processOne(
+    // Reçoit le résultat brut du compute et réalise séquentiellement, sur
+    // le MainActor, les écritures qui ne peuvent pas sortir du runloop
+    // principal : rendu PNG via `ImageRenderer` (confiné MainActor), puis
+    // CSV / XLSX optionnels, puis log. Le `autoreleasepool` interne à
+    // `ChartPNGRenderer.renderPNG` borne la heap autorelease par fichier.
+    private func finalize(
         fileURL: URL,
+        outcome: Result<BatchProcessor.Outcome, Error>,
         outputFolder: URL,
-        config: SWVFileConfiguration,
         export: PerFileExport
-    ) async -> BatchFileResult? {
-        do {
-            // 1. Pipeline CPU-bound sur tâche détachée
-            let outcome = try await Task.detached(priority: .userInitiated) {
-                try BatchProcessor.process(fileURL: fileURL, config: config)
-            }.value
-
-            // 2. Rendu PNG (ImageRenderer requiert le MainActor)
-            let pngURL = outputFolder.appendingPathComponent(
-                fileURL.deletingPathExtension().lastPathComponent + ".png"
-            )
-            try ChartPNGRenderer.renderPNG(
-                analysis: outcome.analysis,
-                potentials: outcome.potentials,
-                rawCurrents: outcome.rawCurrents,
-                to: pngURL
-            )
-
-            // 3. Exports optionnels par fichier
-            switch export {
-            case .none:
-                break
-            case .csv:
-                let csvURL = outputFolder.appendingPathComponent(
-                    fileURL.deletingPathExtension().lastPathComponent + ".csv"
-                )
-                try BatchProcessor.writeCSV(outcome: outcome, to: csvURL)
-            case .xlsx:
-                let xlsxURL = outputFolder.appendingPathComponent(
-                    fileURL.deletingPathExtension().lastPathComponent + ".xlsx"
-                )
-                try BatchProcessor.writeXLSX(outcome: outcome, to: xlsxURL)
-            }
-
-            appendLog(.success, "Traitement : \(fileURL.lastPathComponent)")
-            return outcome.result
-
-        } catch {
+    ) -> BatchFileResult? {
+        switch outcome {
+        case .failure(let error):
             appendLog(
                 .error,
                 "Erreur dans le fichier \(fileURL.lastPathComponent) : \(error.localizedDescription)"
             )
             return nil
+
+        case .success(let outcome):
+            do {
+                let pngURL = outputFolder.appendingPathComponent(
+                    fileURL.deletingPathExtension().lastPathComponent + ".png"
+                )
+                try ChartPNGRenderer.renderPNG(
+                    analysis: outcome.analysis,
+                    potentials: outcome.potentials,
+                    rawCurrents: outcome.rawCurrents,
+                    to: pngURL
+                )
+
+                switch export {
+                case .none:
+                    break
+                case .csv:
+                    let csvURL = outputFolder.appendingPathComponent(
+                        fileURL.deletingPathExtension().lastPathComponent + ".csv"
+                    )
+                    try BatchProcessor.writeCSV(outcome: outcome, to: csvURL)
+                case .xlsx:
+                    let xlsxURL = outputFolder.appendingPathComponent(
+                        fileURL.deletingPathExtension().lastPathComponent + ".xlsx"
+                    )
+                    try BatchProcessor.writeXLSX(outcome: outcome, to: xlsxURL)
+                }
+
+                appendLog(.success, "Traitement : \(fileURL.lastPathComponent)")
+                return outcome.result
+
+            } catch {
+                appendLog(
+                    .error,
+                    "Erreur dans le fichier \(fileURL.lastPathComponent) : \(error.localizedDescription)"
+                )
+                return nil
+            }
         }
     }
 

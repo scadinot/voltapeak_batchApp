@@ -23,25 +23,31 @@ enum ChartPNGRenderer {
         rawCurrents: [Double],
         to url: URL
     ) throws {
-        let view = VoltammogramExportChart(
-            analysis: analysis,
-            potentials: potentials,
-            rawCurrents: rawCurrents
-        )
-        .frame(width: 1000, height: 600)
+        // NSImage / NSBitmapImageRep / TIFF Data sont autoreleased par AppKit ;
+        // sans drain explicite, ils s'accumulent dans le pool autorelease du
+        // runloop et peuvent saturer la mémoire sur des lots de plusieurs
+        // centaines de fichiers.
+        try autoreleasepool {
+            let view = VoltammogramExportChart(
+                analysis: analysis,
+                potentials: potentials,
+                rawCurrents: rawCurrents
+            )
+            .frame(width: 1000, height: 600)
 
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 3.0   // ≈ 300 dpi sur l'écran de référence
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 3.0   // ≈ 300 dpi sur l'écran de référence
 
-        guard let nsImage = renderer.nsImage,
-              let tiff = nsImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let pngData = bitmap.representation(using: .png, properties: [:])
-        else {
-            throw RenderError.failed
+            guard let nsImage = renderer.nsImage,
+                  let tiff = nsImage.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiff),
+                  let pngData = bitmap.representation(using: .png, properties: [:])
+            else {
+                throw RenderError.failed
+            }
+
+            try pngData.write(to: url, options: .atomic)
         }
-
-        try pngData.write(to: url, options: .atomic)
     }
 
     enum RenderError: LocalizedError {
