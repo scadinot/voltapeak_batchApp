@@ -49,10 +49,10 @@ struct ContentView: View {
 
     private var settingsGroup: some View {
         GroupBox("Paramètres de lecture") {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
+            Grid(alignment: .leadingFirstTextBaseline,
+                 horizontalSpacing: 16, verticalSpacing: 10) {
+                GridRow {
                     Text("Séparateur de colonnes :")
-                        .frame(width: 170, alignment: .leading)
                     Picker("", selection: $viewModel.config.columnSeparator) {
                         ForEach(SWVFileConfiguration.ColumnSeparator.allCases, id: \.self) { sep in
                             Text(sep.displayName).tag(sep)
@@ -61,10 +61,8 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
-
-                HStack(alignment: .firstTextBaseline) {
+                GridRow {
                     Text("Séparateur décimal :")
-                        .frame(width: 170, alignment: .leading)
                     Picker("", selection: $viewModel.config.decimalSeparator) {
                         ForEach(SWVFileConfiguration.DecimalSeparator.allCases, id: \.self) { sep in
                             Text(sep.displayName).tag(sep)
@@ -72,13 +70,9 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .frame(maxWidth: 240)
-                    Spacer()
                 }
-
-                HStack(alignment: .firstTextBaseline) {
+                GridRow {
                     Text("Export des fichiers :")
-                        .frame(width: 170, alignment: .leading)
                     Picker("", selection: $viewModel.perFileExport) {
                         ForEach(PerFileExport.allCases) { option in
                             Text(option.displayName).tag(option)
@@ -87,22 +81,18 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
-
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Traitement parallèle :")
-                        .frame(width: 170, alignment: .leading)
-                    Toggle(isOn: $viewModel.parallelEnabled) {
-                        Text(
-                            viewModel.parallelEnabled
-                            ? "Activé (un processus par cœur)"
-                            : "Désactivé (séquentiel)"
-                        )
+                GridRow {
+                    Text("Mode de traitement :")
+                    Picker("", selection: $viewModel.parallelEnabled) {
+                        Text("Multi-thread (un Task par cœur)").tag(true)
+                        Text("Séquentiel").tag(false)
                     }
-                    .toggleStyle(.switch)
-                    Spacer()
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
             }
-            .padding(8)
+            .padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .disabled(viewModel.isProcessing)
         }
     }

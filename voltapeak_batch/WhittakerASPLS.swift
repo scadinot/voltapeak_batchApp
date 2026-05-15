@@ -14,7 +14,7 @@ import Foundation
 /// - vecteur α modulant la pénalité localement : `lhs = diag(α) · (λ·D^TD)`
 /// - mise à jour sigmoïdale des poids basée sur `σ = std(résidus négatifs)`
 /// - convergence sur le changement relatif des poids (PAS de la baseline)
-enum WhittakerASPLS {
+nonisolated enum WhittakerASPLS {
 
     /// Calcule la baseline par algorithme asPLS exact (pybaselines.whittaker.aspls)
     /// - Parameters:

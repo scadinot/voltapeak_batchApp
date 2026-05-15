@@ -9,7 +9,7 @@
 import Foundation
 
 /// Savitzky-Golay avec coefficients pré-calculés de scipy
-enum SavitzkyGolay {
+nonisolated enum SavitzkyGolay {
 
     /// scipy.signal.savgol_coeffs(window_length=11, polyorder=2, pos=p, use='dot') pour p ∈ 0..10
     ///

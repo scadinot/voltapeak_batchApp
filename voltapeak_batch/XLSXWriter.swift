@@ -21,7 +21,7 @@ enum XLSXCell {
     case empty
 }
 
-enum XLSXWriter {
+nonisolated enum XLSXWriter {
 
     // MARK: - Mode 1 : export par fichier (analyse complète)
 
@@ -195,7 +195,7 @@ enum XLSXWriter {
 
 // MARK: - Mini ZIP store-only (compression method = 0)
 
-private enum ZIPStore {
+private nonisolated enum ZIPStore {
 
     /// Empaquette une liste de fichiers en archive ZIP non compressée.
     /// Format suffisant pour OOXML : Excel/Numbers acceptent le ZIP store-only.
@@ -282,7 +282,7 @@ private enum ZIPStore {
     }
 }
 
-private extension Data {
+private nonisolated extension Data {
     mutating func appendUInt16LE(_ v: UInt16) {
         append(UInt8(v & 0xff))
         append(UInt8((v >> 8) & 0xff))

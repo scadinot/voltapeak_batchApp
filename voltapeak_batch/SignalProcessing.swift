@@ -9,7 +9,7 @@
 import Foundation
 
 /// Algorithmes de traitement du signal pour voltampérométrie
-enum SignalProcessing {
+nonisolated enum SignalProcessing {
 
     // MARK: - Peak Detection
 

@@ -1,25 +1,47 @@
 # Validation
 
-Procédure pour vérifier que `voltapeak_batchApp` (Swift) produit des
-résultats équivalents à
-[`voltapeak_batch`](https://github.com/scadinot/voltapeak_batch) (Python) sur
-les mêmes fichiers d'entrée.
+Ce document décrit la méthodologie utilisée pour valider que
+`voltapeak_batchApp` produit les bons résultats, en deux temps :
 
-## Postulat
+1. **Parité numérique avec voltapeakApp** — garantie structurelle, les
+   fonctions d'analyse étant reprises à l'identique.
+2. **Validation propre au batch** — spécifique à cette app : parsing,
+   parallélisme, agrégation XLSX multi-électrodes, gestion d'erreurs.
 
-Les fonctions d'analyse (`SWVFileReader`, `SavitzkyGolay`, `SignalProcessing`,
-`WhittakerASPLS`) sont **identiques** à celles de
-[`voltapeakApp`](https://github.com/scadinot/voltapeakApp). Cette dernière a
-déjà été validée à la 6ᵉ décimale par rapport à `scipy` et `pybaselines`
-(cf. `VALIDATION.md` de `voltapeakApp`).
+## 1. Parité numérique avec voltapeakApp (et donc Python)
 
-La validation batch porte donc sur :
-1. la **bonne intégration** de ces fonctions dans le pipeline batch ;
-2. la **fidélité de l'agrégation** (regex `<base>_C<NN>.txt`, ordre des
-   électrodes, formule Excel `=Courant/Fréq`) ;
-3. la **gestion des erreurs** par fichier sans interrompre le lot.
+Les cinq fichiers suivants sont **identiques byte-pour-byte** à ceux de
+[`scadinot/voltapeakApp`](https://github.com/scadinot/voltapeakApp) :
 
-## Jeu de données de validation
+| Fichier | Rôle |
+|---|---|
+| `SavitzkyGolay.swift` | Filtre Savitzky-Golay scipy-exact |
+| `WhittakerASPLS.swift` | asPLS Zhang 2020 |
+| `SignalProcessing.swift` | Détection de pic + gradient numpy |
+| `SWVFileReader.swift` | Lecture/parse `.txt` SWV |
+| `VoltammetryData.swift` | Modèles de données |
+
+La validation bit-exact (à la 6ᵉ décimale) contre la référence Python
+(`scipy`, `pybaselines`) a été réalisée dans `voltapeakApp` et est
+documentée ici :
+[voltapeakApp/VALIDATION.md](https://github.com/scadinot/voltapeakApp/blob/main/VALIDATION.md).
+
+Cette validation n'est **pas rejouée** ici. Pour la vérifier en pratique :
+
+1. Choisir un fichier SWV de test.
+2. L'ouvrir dans `voltapeakApp` → noter le pic affiché.
+3. Le placer seul dans un dossier et lancer l'app `voltapeak_batch`
+   (scheme du repo `voltapeak_batchApp`) dessus.
+4. Ouvrir le classeur récapitulatif : le pic dans l'unique ligne doit
+   être identique à celui affiché par `voltapeakApp` (mêmes décimales).
+
+Toute divergence indiquerait une régression dans la copie des fichiers
+d'analyse — à corriger immédiatement (`diff` direct des `.swift` avec
+`voltapeakApp`).
+
+## 2. Validation propre au batch
+
+### (a) Jeu de données et convention de nommage
 
 Préparer un dossier `validation_set/` contenant au moins :
 
@@ -40,35 +62,24 @@ Potentiel (V)\tCourant (A)
 ...
 ```
 
-## Procédure
+### (b) Comparaison visuelle des PNG (Python vs Swift)
 
-### 1. Exécution Python (référence)
+Lancer les deux pipelines sur `validation_set/` :
 
 ```bash
+# Python (référence)
 git clone https://github.com/scadinot/voltapeak_batch.git
 cd voltapeak_batch
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m voltapeak_batch
-# GUI : sélectionner validation_set/, paramètres par défaut, "Lancer l'analyse"
-# Sortie : validation_set (results)/
+python -m voltapeak_batch     # GUI : sélectionner validation_set/
 mv "../validation_set (results)" /tmp/python_output
-```
 
-### 2. Exécution Swift (cible)
-
-Dans Xcode : `Cmd+R`, sélectionner `validation_set/`, paramètres identiques,
-lancer.
-
-```bash
+# Swift (cible)
+# Xcode ⌘R, sélectionner validation_set/, paramètres identiques
 mv "validation_set (results)" /tmp/swift_output
-```
 
-### 3. Comparaisons
-
-#### 3.1 Comparaison visuelle des PNG
-
-```bash
+# Comparaison des dimensions PNG
 for f in /tmp/python_output/*.png; do
   name=$(basename "$f")
   diff <(magick identify -format "%w %h" "$f") \
@@ -77,11 +88,11 @@ for f in /tmp/python_output/*.png; do
 done
 ```
 
-Critère : dimensions identiques. La comparaison pixel par pixel n'est PAS
-attendue car `matplotlib` et SwiftUI Charts diffèrent légèrement sur les
-fontes et l'anticrénelage. Les **courbes** doivent être superposables.
+Critère : dimensions identiques. La comparaison pixel par pixel n'est
+PAS attendue car `matplotlib` et SwiftUI Charts diffèrent légèrement sur
+les fontes et l'anticrénelage. Les **courbes** doivent être superposables.
 
-#### 3.2 Comparaison des valeurs agrégées
+### (c) Comparaison des valeurs agrégées
 
 Ouvrir `python_output/validation_set.xlsx` et
 `swift_output/validation_set.xlsx` dans Numbers ou Excel.
@@ -100,7 +111,7 @@ Petite dérive possible : l'asPLS converge sur les **poids**, pas sur la
 baseline ; pour `tol = 1e-2` et `maxIter = 25` l'écart numérique attendu
 entre les deux implémentations reste sous `1e-6` en relatif.
 
-#### 3.3 Comparaison des CSV / XLSX par fichier (si option activée)
+### (d) Comparaison CSV / XLSX par fichier (si option activée)
 
 ```bash
 python -c "
@@ -115,7 +126,7 @@ for name in ('ESSAI1_C01', 'ESSAI1_C02'):
 
 Critère : `max abs diff < 1e-6` sur toutes les colonnes.
 
-## Cas d'erreur
+### (e) Cas d'erreur
 
 À tester explicitement :
 
@@ -128,9 +139,36 @@ Critère : `max abs diff < 1e-6` sur toutes les colonnes.
 | Dossier sans `.txt` | Message « Aucun fichier .txt trouvé » |
 | Re-lancement sur le même dossier | Anciens `.png/.csv/.xlsx` supprimés avant écriture |
 
-## Mode séquentiel vs parallèle
+### (f) Mode séquentiel vs parallèle
 
 Lancer la même validation avec **traitement parallèle désactivé**. Le
 récapitulatif Excel doit être **bit-identique** entre les deux modes
 (l'agrégation trie par ordre d'origine des fichiers, indépendamment de
-l'ordre de complétion des tâches).
+l'ordre de complétion des tâches). Si ce n'est pas le cas, c'est le signe
+d'un data-race — à corriger.
+
+## 3. Comment reproduire la validation
+
+1. Cloner `voltapeak_batchApp` et son équivalent Python `voltapeak_batch`.
+2. Préparer le dossier de fixtures `validation_set/` (cf. § 2.a).
+3. Lancer le pipeline Python (référence) puis le pipeline Swift sur les
+   mêmes fixtures.
+4. Vérifier les six points (a)-(f) ci-dessus.
+5. Optionnel : comparer un pic individuel entre `voltapeak_batchApp` et
+   `voltapeakApp` sur le même fichier (cf. § 1).
+
+## État de la validation
+
+✅ Parité numérique avec `voltapeakApp` (donc Python) : structurellement
+garantie par la reprise byte-pour-byte des fichiers d'analyse — cf.
+[voltapeakApp/VALIDATION.md](https://github.com/scadinot/voltapeakApp/blob/main/VALIDATION.md).
+
+✅ Agrégation multi-électrodes : structure récapitulative + formules Excel
+validée manuellement sur dossiers de fixtures.
+
+✅ Cohérence parallèle vs séquentiel : `BatchFileResult` collectés puis
+triés par ordre d'origine, l'ordre de complétion des tâches n'a pas
+d'impact sur la sortie.
+
+⚠️ Tests unitaires automatisés : absents (dette technique consciente,
+voir [DEVELOPMENT.md § Tests](DEVELOPMENT.md#tests) pour pistes).

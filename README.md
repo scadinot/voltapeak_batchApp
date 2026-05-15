@@ -1,16 +1,23 @@
-# voltapeak_batchApp
+# voltapeak_batchApp — analyse SWV batch multi-électrodes (macOS / Swift)
 
-**Application macOS native (Swift / SwiftUI) d'analyse par lot de fichiers de
-voltampérométrie à onde carrée (SWV — *Square Wave Voltammetry*) avec
-correction de ligne de base par l'algorithme asPLS.**
+**Application macOS native (Swift / SwiftUI) d'analyse par lot de fichiers
+de voltampérométrie à onde carrée (SWV) avec correction de ligne de base
+asPLS et agrégation multi-électrodes.**
 
 `voltapeak_batchApp` est la conversion Swift macOS de
-[`voltapeak_batch`](https://github.com/scadinot/voltapeak_batch) (Python /
-Tkinter). Les algorithmes d'analyse (Savitzky-Golay scipy-exact, asPLS Zhang
-2020) sont **identiques** à ceux validés dans
-[`voltapeakApp`](https://github.com/scadinot/voltapeakApp).
+[`scadinot/voltapeak_batch`](https://github.com/scadinot/voltapeak_batch)
+(Python / Tkinter). Les algorithmes d'analyse (Savitzky-Golay scipy-exact,
+asPLS Zhang 2020) sont repris sans modification de
+[`voltapeakApp`](https://github.com/scadinot/voltapeakApp), validé
+bit-exact à la 6ᵉ décimale contre la référence Python.
 
----
+## Famille de projets
+
+| Repo | Rôle |
+|---|---|
+| [`voltapeakApp`](https://github.com/scadinot/voltapeakApp) | **App GUI mono-fichier**, référence canonique des algorithmes |
+| [`voltapeak_batchApp`](https://github.com/scadinot/voltapeak_batchApp) | App batch multi-fichiers avec **agrégation multi-électrodes** *(ce repo)* |
+| [`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp) | App batch multi-fichiers avec **agrégation loops/dosage hiérarchique** |
 
 ## Table des matières
 
@@ -23,9 +30,7 @@ Tkinter). Les algorithmes d'analyse (Savitzky-Golay scipy-exact, asPLS Zhang
 7. [Paramètres de l'algorithme](#paramètres-de-lalgorithme)
 8. [Parallélisme](#parallélisme)
 9. [Documentation complémentaire](#documentation-complémentaire)
-10. [Licence](#licence)
-
----
+10. [Crédits & licence](#crédits--licence)
 
 ## À quoi sert cet outil ?
 
@@ -35,18 +40,16 @@ caractéristique de l'espèce électroactive — est superposé à une **ligne d
 base** lentement variable. L'analyse quantitative nécessite donc de
 soustraire cette ligne de base pour ne garder que le pic.
 
-L'application automatise ce traitement pour des **campagnes multi-électrodes
-multi-échantillons** : chaque fichier porte un nom de la forme
-`<base>_C<NN>.txt` (ex. `ESSAI1_C01.txt`, `ESSAI1_C02.txt`, …). L'outil
-produit :
+L'application automatise ce traitement pour des **campagnes
+multi-électrodes multi-échantillons** : chaque fichier porte un nom de la
+forme `<base>_C<NN>.txt` (ex. `ESSAI1_C01.txt`, `ESSAI1_C02.txt`, …).
+L'outil produit :
 
 - un graphique PNG d'analyse par fichier (300 dpi) ;
 - éventuellement un CSV ou un XLSX par fichier (signal lissé + corrigé) ;
 - un **fichier Excel récapitulatif** regroupant une ligne par base et des
-  colonnes par électrode (Tension, Courant, Charge), avec une formule Excel
-  `=Courant / Fréquence` injectée pour la charge.
-
----
+  colonnes par électrode (Tension, Courant, Charge), avec une formule
+  Excel `=Courant / Fréquence` injectée pour la charge.
 
 ## Prérequis
 
@@ -54,8 +57,6 @@ produit :
 - **Xcode 26** ou supérieur (`objectVersion = 77` du `project.pbxproj`)
 - Aucune dépendance externe — tous les algorithmes scientifiques sont
   implémentés en pur Swift (cf. [ARCHITECTURE.md](ARCHITECTURE.md)).
-
----
 
 ## Build et lancement
 
@@ -65,7 +66,7 @@ produit :
 git clone https://github.com/scadinot/voltapeak_batchApp.git
 cd voltapeak_batchApp
 open voltapeak_batch.xcodeproj
-# Cmd+R pour lancer
+# ⌘R pour lancer
 ```
 
 ### Depuis la ligne de commande
@@ -78,10 +79,8 @@ xcodebuild -project voltapeak_batch.xcodeproj \
 ```
 
 Le binaire produit se trouve dans
-`build/Release/voltapeak_batch.app` (ou dans `~/Library/Developer/Xcode/DerivedData/...`
-selon votre configuration).
-
----
+`build/Release/voltapeak_batch.app` (ou dans
+`~/Library/Developer/Xcode/DerivedData/...` selon votre configuration).
 
 ## Utilisation
 
@@ -94,12 +93,11 @@ L'interface reproduit fidèlement la fenêtre Tkinter de la version Python :
    - séparateur décimal (*Point* ou *Virgule*),
    - export par fichier (*Ne pas exporter*, *CSV*, *Excel*),
    - traitement parallèle (activé par défaut).
-3. **Lancer l'analyse** — le journal affiche chaque fichier traité (en rouge
-   en cas d'erreur), la barre de progression avance au fur et à mesure.
+3. **Lancer l'analyse** — le journal affiche chaque fichier traité (en
+   rouge en cas d'erreur), la barre de progression avance au fur et à
+   mesure.
 4. **Ouvrir le dossier de résultats** — disponible une fois le traitement
    terminé, ouvre le dossier `<entrée> (results)` dans le Finder.
-
----
 
 ## Format des fichiers d'entrée
 
@@ -114,7 +112,8 @@ Chaque fichier `.txt` doit contenir :
 
 ### Convention de nommage
 
-Pour permettre l'agrégation multi-électrodes, le nom de fichier doit suivre :
+Pour permettre l'agrégation multi-électrodes, le nom de fichier doit
+suivre :
 
 ```
 <base>_C<NN>.txt
@@ -125,8 +124,6 @@ Exemples valides : `ESSAI1_C01.txt`, `MANIP_2025-04_C12.txt`.
 Si un fichier ne respecte pas ce pattern, il est traité individuellement
 mais apparaît dans le récapitulatif avec son nom complet comme *Base* et
 des colonnes d'électrode vides.
-
----
 
 ## Fichiers produits en sortie
 
@@ -162,27 +159,24 @@ chaque électrode détectée :
 | `C<NN> - Courant (A)` | amplitude du pic après correction |
 | `C<NN> - Charge (C)` | **formule Excel** `=Courant / Fréq` — recalculée dynamiquement |
 
----
-
 ## Paramètres de l'algorithme
 
-Identiques à la version Python (cf. [ALGORITHMS.md](ALGORITHMS.md) pour le
-détail mathématique) :
+Identiques à la version Python et aux autres apps de la famille — détails
+mathématiques dans [ALGORITHMS.md](ALGORITHMS.md) :
 
 | Paramètre | Valeur | Rôle |
 |---|---|---|
 | `windowLength` (Savitzky-Golay) | **11** | largeur de la fenêtre de lissage |
 | `polynomialOrder` (Savitzky-Golay) | **2** | ordre du polynôme local |
 | `marginRatio` | **0,10** | fraction des bords exclue pour la détection de pic |
-| `maxSlope` | **500** | plafond de pente `|dI/dV|` : écarte les flancs des sommets |
+| `maxSlope` | **500** (`nil` pour désactiver) | plafond de pente `|dI/dV|` |
 | `exclusionWidthRatio` | **0,03** | demi-largeur d'exclusion asPLS (fraction de l'étendue) |
 | `lambdaFactor` | **1 000** | rigidité de la baseline : λ effectif = `lambdaFactor · n²` |
 | `diffOrder` (asPLS) | **2** | ordre de la différence pénalisée |
 | `tol` (asPLS) | **1e-2** | tolérance de convergence (sur les poids) |
 | `maxIter` (asPLS) | **25** | nombre maximal d'itérations |
+| `asymmetricCoef` (asPLS) | **0,5** | coefficient `k` du papier asPLS |
 | `frequencyHz` (récapitulatif) | **50 Hz** | dénominateur de `Charge = Courant / Fréq` |
-
----
 
 ## Parallélisme
 
@@ -193,19 +187,31 @@ Le traitement par défaut est parallélisé via Swift Concurrency
 Un mode séquentiel est disponible (commutateur dans l'UI) pour le débogage
 ou la reproductibilité stricte de l'ordre d'écriture.
 
----
-
 ## Documentation complémentaire
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — diagramme du pipeline, liste des fichiers Swift, dépendances Apple
-- [ALGORITHMS.md](ALGORITHMS.md) — détails mathématiques (Savitzky-Golay scipy-exact, asPLS Zhang)
-- [CHANGELOG.md](CHANGELOG.md) — historique des versions
-- [DEVELOPMENT.md](DEVELOPMENT.md) — conventions de développement, build, tests
-- [DISTRIBUTION.md](DISTRIBUTION.md) — signature, notarisation, création de DMG
-- [VALIDATION.md](VALIDATION.md) — procédure de comparaison Python ↔ Swift
+| Document | Contenu |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Structure du projet, pipeline, fichiers Swift, modèles de données, concurrence |
+| [ALGORITHMS.md](ALGORITHMS.md) | Algorithmes numériques (Savitzky-Golay, détection de pic, asPLS Zhang 2020) |
+| [VALIDATION.md](VALIDATION.md) | Méthodologie de validation, parité avec la référence Python |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Guide développeur : build, debug, conventions, ajout de features |
+| [DISTRIBUTION.md](DISTRIBUTION.md) | Signature, notarisation Apple, création de DMG, CI |
+| [CHANGELOG.md](CHANGELOG.md) | Historique des versions (Keep-a-Changelog) |
 
----
+## Crédits & licence
 
-## Licence
+Algorithmes — portages directs des bibliothèques Python de référence :
+
+- **scipy** (`scipy.signal.savgol_filter`) — lissage Savitzky-Golay
+- **pybaselines** (`pybaselines.whittaker.aspls`) — baseline asPLS Zhang 2020
+- **numpy** (`np.gradient`) — gradient 2ᵉ ordre non-uniforme
+- **matplotlib** — palette **tab10** pour parité visuelle
+
+Sources d'inspiration :
+
+- [`scadinot/voltapeak_batch`](https://github.com/scadinot/voltapeak_batch) — script Python source (Tkinter)
+- [`scadinot/voltapeakApp`](https://github.com/scadinot/voltapeakApp) — référence canonique des fonctions d'analyse, validée bit-exact
+
+Références bibliographiques détaillées dans [ALGORITHMS.md](ALGORITHMS.md).
 
 Distribué sous **licence MIT** — Copyright (c) 2026 @scadinot.

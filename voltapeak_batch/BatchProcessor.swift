@@ -9,7 +9,7 @@
 
 import Foundation
 
-enum BatchProcessor {
+nonisolated enum BatchProcessor {
 
     struct Outcome {
         let result: BatchFileResult         // ligne du récapitulatif
