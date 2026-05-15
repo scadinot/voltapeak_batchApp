@@ -52,6 +52,15 @@ nonisolated enum BatchProcessor {
 
         // 5. Baseline asPLS — paramètres identiques à __main__.py
         let n = smoothed.count
+
+        // Garde-fou : refuser les fichiers anormalement grands en amont du
+        // solveur. Le solveur banded reste tractable bien au-delà, mais on
+        // bloque ici les acquisitions/parsing pathologiques pour qu'ils
+        // remontent comme une erreur explicite dans le journal du batch.
+        guard n <= WhittakerASPLS.maxN else {
+            throw SWVFileReader.FileError.tooManyPoints(n, limit: WhittakerASPLS.maxN)
+        }
+
         let lambdaFactor = 1e3
         let lam = lambdaFactor * Double(n * n)
 
