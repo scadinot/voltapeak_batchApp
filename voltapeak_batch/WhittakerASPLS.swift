@@ -103,14 +103,14 @@ nonisolated enum WhittakerASPLS {
             }
 
             // Résolution banded LU avec pivotage partiel : dgbsv_
-            var n_l = __CLPK_integer(n)
-            var kl_l = __CLPK_integer(kl)
-            var ku_l = __CLPK_integer(ku)
-            var nrhs = __CLPK_integer(1)
-            var ldab_l = __CLPK_integer(ldab)
-            var ldb_l = __CLPK_integer(n)
-            var info = __CLPK_integer(0)
-            var ipiv = [__CLPK_integer](repeating: 0, count: n)
+            var n_l = __LAPACK_int(n)
+            var kl_l = __LAPACK_int(kl)
+            var ku_l = __LAPACK_int(ku)
+            var nrhs = __LAPACK_int(1)
+            var ldab_l = __LAPACK_int(ldab)
+            var ldb_l = __LAPACK_int(n)
+            var info = __LAPACK_int(0)
+            var ipiv = [__LAPACK_int](repeating: 0, count: n)
 
             ab.withUnsafeMutableBufferPointer { abPtr in
                 b.withUnsafeMutableBufferPointer { bPtr in
