@@ -69,9 +69,9 @@ contre la référence Python.
     rendu PNG implicite.
 - **Migration vers la nouvelle interface LAPACK Accelerate**
   (`ACCELERATE_NEW_LAPACK=1`, `__LAPACK_int` au lieu de
-  `__CLPK_integer`) : silencement du warning de deprecation macOS 13.3
-  sur l'ancienne API CLAPACK. Symbole `dgbsv_` et signature
-  fonctionnellement inchangés.
+  `__CLPK_integer`) : suppression de l'avertissement de dépréciation
+  introduit en macOS 13.3 sur l'ancienne API CLAPACK. Symbole `dgbsv_`
+  et signature fonctionnellement inchangés.
 - **Robustesse `dgbsv_`** : remplacement de la `precondition`
   monolithique par un traitement explicite de `info < 0` (bug d'appel,
   argument à la position `-info`) vs `info > 0` (matrice singulière à
