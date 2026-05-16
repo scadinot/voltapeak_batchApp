@@ -82,6 +82,15 @@ struct ContentView: View {
                     .labelsHidden()
                 }
                 GridRow {
+                    Text("Graphique PNG par fichier :")
+                    Picker("", selection: $viewModel.exportGraph) {
+                        Text("Générer").tag(true)
+                        Text("Ne pas générer").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+                GridRow {
                     Text("Mode de traitement :")
                     Picker("", selection: $viewModel.parallelEnabled) {
                         Text("Multi-thread (un Task par cœur)").tag(true)
