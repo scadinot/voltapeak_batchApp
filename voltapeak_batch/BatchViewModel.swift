@@ -31,7 +31,7 @@ final class BatchViewModel {
     var inputFolder: URL?
     var config = SWVFileConfiguration()
     var perFileExport: PerFileExport = .none
-    var exportGraph: Bool = true
+    var exportGraph: Bool = false
     var parallelEnabled: Bool = true
 
     var isProcessing: Bool = false
