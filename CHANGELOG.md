@@ -11,6 +11,87 @@ frères :
 [`voltapeakApp`](https://github.com/scadinot/voltapeakApp/blob/main/CHANGELOG.md),
 [`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp/blob/main/CHANGELOG.md).
 
+## [1.0.2] — 2026-05-16 — Performance asPLS et alignement UI avec `voltapeak_loopsApp`
+
+Version de stabilisation : suppression du goulot algorithmique du
+solveur asPLS, alignement de l'UI sur `voltapeak_loopsApp` et toggle
+PNG explicite pour les campagnes de plusieurs milliers de fichiers.
+Aucune régression numérique : la pipeline d'analyse reste bit-exact
+contre la référence Python.
+
+### Performance
+
+- **Solveur asPLS banded LAPACK** (`WhittakerASPLS.swift`) : la
+  matrice `diag(α)·(λ·D^T·D) + diag(w)` est pentadiagonale (KL=KU=2),
+  désormais résolue via `Accelerate.dgbsv_` (LU banded avec pivotage
+  partiel) en O(n) au lieu d'un Gauss dense O(n³). Sur les fichiers à
+  plusieurs milliers de points, gain pratique > 1000× (un fichier de
+  6 600 points effectifs passe de ~24 min à ~25 ms ; un fichier de
+  13 000 points de ~3 h à ~100 ms). Mémoire : 7n doubles par itération
+  au lieu de n².
+- **Drainage de la mémoire AppKit** (`ChartPNGRenderer.swift`) :
+  encapsulation du rendu PNG dans un `autoreleasepool` pour borner la
+  heap autorelease à 1 image — corrige les freezes observés sur des
+  lots de plusieurs centaines de fichiers (saturation par
+  `NSImage` / `NSBitmapImageRep` autoreleased ~21 MB chacun).
+- **Séquentialisation des écritures** sur le `MainActor`
+  (`BatchViewModel.swift`) : les tâches du pool de
+  `withTaskGroup` ne font plus que le compute (hors MainActor) ; PNG,
+  CSV, XLSX et journal sont écrits une par une dans le drain
+  `group.next()`. Élimine la concurrence MainActor qui empêchait le
+  drain de runloop.
+- **Compute pur** : sur un benchmark 1188 fichiers en Release, batch
+  passe de ~46 s à **~2.4 s** avec PNG désactivé (par défaut désormais,
+  cf. *Modifié* ci-dessous). Plus rapide que la référence Python (20 s).
+
+### Ajouté
+
+- **Garde-fou `WhittakerASPLS.maxN = 200 000`** : nouvelle constante
+  publique. `BatchProcessor.process` refuse les fichiers au-delà avec
+  un nouveau cas d'erreur
+  `SWVFileReader.FileError.tooManyPoints(Int, limit: Int)` qui remonte
+  dans le journal. Filet de sécurité contre les fichiers corrompus
+  ou mal parsés.
+- **Toggle UI « Export des graphiques »** dans le panneau Paramètres :
+  permet de désactiver la génération PNG par fichier (alignement
+  fonctionnel avec `voltapeak_loopsApp`).
+
+### Modifié
+
+- **Valeurs par défaut alignées sur `voltapeak_loopsApp`** :
+  `BatchViewModel.exportGraph` passe à **`false`** (auparavant `true`,
+  inconditionnellement actif). Effet : par défaut le batch ne génère
+  plus les PNG et termine ~19× plus vite ; l'utilisateur les active
+  explicitement via le toggle s'il en a besoin.
+- **Libellés du panneau Paramètres alignés sur `voltapeak_loopsApp`** :
+  - « Export des fichiers : » → « Export des fichiers traités : ».
+  - Nouveau libellé « Export des graphiques : » au lieu de l'ancien
+    rendu PNG implicite.
+- **Migration vers la nouvelle interface LAPACK Accelerate**
+  (`ACCELERATE_NEW_LAPACK=1`, `__LAPACK_int` au lieu de
+  `__CLPK_integer`) : silencement du warning de deprecation macOS 13.3
+  sur l'ancienne API CLAPACK. Symbole `dgbsv_` et signature
+  fonctionnellement inchangés.
+- **Robustesse `dgbsv_`** : remplacement de la `precondition`
+  monolithique par un traitement explicite de `info < 0` (bug d'appel,
+  argument à la position `-info`) vs `info > 0` (matrice singulière à
+  la ligne `info`). Message diagnostique actionnable au lieu d'un
+  crash opaque.
+- **Garde-fou `maxN`** : `precondition` → `assert` (debug-only) ; le
+  solveur banded reste tractable bien au-delà du seuil en Release, on
+  préfère une dégradation de perf à un crash batch si un caller futur
+  oublie le filtre amont.
+
+### Compatibilité
+
+- Aucune modification de l'API publique d'analyse ; la signature de
+  `WhittakerASPLS.aspls(...)` est inchangée.
+- Aucune modification de la sémantique numérique : la boucle
+  d'itération asPLS (mise à jour des poids, calcul de σ, critère de
+  convergence sur le changement relatif) est strictement préservée.
+- macOS 26.1+ requis (inchangé).
+- Apple Silicon (`arm64`) (inchangé).
+
 ## [1.0.0] — 2026-05-13 — Conversion Swift macOS de `voltapeak_batch`
 
 Première version de `voltapeak_batchApp` : conversion Swift macOS native
