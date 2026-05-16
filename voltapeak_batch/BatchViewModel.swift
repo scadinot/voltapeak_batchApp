@@ -31,6 +31,7 @@ final class BatchViewModel {
     var inputFolder: URL?
     var config = SWVFileConfiguration()
     var perFileExport: PerFileExport = .none
+    var exportGraph: Bool = true
     var parallelEnabled: Bool = true
 
     var isProcessing: Bool = false
@@ -108,6 +109,7 @@ final class BatchViewModel {
         // Snapshot des paramètres pour les tâches concurrentes
         let configSnapshot = config
         let exportSnapshot = perFileExport
+        let exportGraphSnapshot = exportGraph
 
         // 4. Traitement
         let startedAt = Date()
@@ -116,13 +118,15 @@ final class BatchViewModel {
                 txtFiles: txtFiles,
                 outputFolder: outputFolder,
                 config: configSnapshot,
-                export: exportSnapshot
+                export: exportSnapshot,
+                exportGraph: exportGraphSnapshot
               )
             : await runSequential(
                 txtFiles: txtFiles,
                 outputFolder: outputFolder,
                 config: configSnapshot,
-                export: exportSnapshot
+                export: exportSnapshot,
+                exportGraph: exportGraphSnapshot
               )
 
         // 5. Classeur récapitulatif
@@ -161,7 +165,8 @@ final class BatchViewModel {
         txtFiles: [URL],
         outputFolder: URL,
         config: SWVFileConfiguration,
-        export: PerFileExport
+        export: PerFileExport,
+        exportGraph: Bool
     ) async -> [BatchFileResult] {
         var collected: [BatchFileResult] = []
         for file in txtFiles {
@@ -177,7 +182,8 @@ final class BatchViewModel {
                 fileURL: file,
                 outcome: outcome,
                 outputFolder: outputFolder,
-                export: export
+                export: export,
+                exportGraph: exportGraph
             ) {
                 collected.append(result)
             }
@@ -197,7 +203,8 @@ final class BatchViewModel {
         txtFiles: [URL],
         outputFolder: URL,
         config: SWVFileConfiguration,
-        export: PerFileExport
+        export: PerFileExport,
+        exportGraph: Bool
     ) async -> [BatchFileResult] {
         let maxConcurrency = max(1, ProcessInfo.processInfo.activeProcessorCount)
         var indexed: [(index: Int, result: BatchFileResult)] = []
@@ -230,7 +237,8 @@ final class BatchViewModel {
                     fileURL: file,
                     outcome: outcome,
                     outputFolder: outputFolder,
-                    export: export
+                    export: export,
+                    exportGraph: exportGraph
                 ) {
                     indexed.append((idx, result))
                 }
@@ -265,7 +273,8 @@ final class BatchViewModel {
         fileURL: URL,
         outcome: Result<BatchProcessor.Outcome, Error>,
         outputFolder: URL,
-        export: PerFileExport
+        export: PerFileExport,
+        exportGraph: Bool
     ) -> BatchFileResult? {
         switch outcome {
         case .failure(let error):
@@ -277,15 +286,17 @@ final class BatchViewModel {
 
         case .success(let outcome):
             do {
-                let pngURL = outputFolder.appendingPathComponent(
-                    fileURL.deletingPathExtension().lastPathComponent + ".png"
-                )
-                try ChartPNGRenderer.renderPNG(
-                    analysis: outcome.analysis,
-                    potentials: outcome.potentials,
-                    rawCurrents: outcome.rawCurrents,
-                    to: pngURL
-                )
+                if exportGraph {
+                    let pngURL = outputFolder.appendingPathComponent(
+                        fileURL.deletingPathExtension().lastPathComponent + ".png"
+                    )
+                    try ChartPNGRenderer.renderPNG(
+                        analysis: outcome.analysis,
+                        potentials: outcome.potentials,
+                        rawCurrents: outcome.rawCurrents,
+                        to: pngURL
+                    )
+                }
 
                 switch export {
                 case .none:
