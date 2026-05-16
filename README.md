@@ -399,7 +399,7 @@ Les détails d'implémentation (paramètres, garde-fous, conventions de signe) s
 
 ## Feuille de route
 
-Voir [`ROADMAP.md`](ROADMAP.md) pour l'ensemble des évolutions prévues (à venir : exposition des hyperparamètres dans l'UI, fréquence configurable, signature Developer ID, etc.).
+Voir [`ROADMAP.md`](ROADMAP.md) pour l'ensemble des évolutions prévues (à venir : exposition des hyperparamètres dans l'UI, signature Developer ID, etc.).
 
 ---
 
