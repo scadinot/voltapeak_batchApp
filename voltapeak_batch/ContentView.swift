@@ -72,7 +72,7 @@ struct ContentView: View {
                     .labelsHidden()
                 }
                 GridRow {
-                    Text("Export des fichiers :")
+                    Text("Export des fichiers traités :")
                     Picker("", selection: $viewModel.perFileExport) {
                         ForEach(PerFileExport.allCases) { option in
                             Text(option.displayName).tag(option)
@@ -82,10 +82,10 @@ struct ContentView: View {
                     .labelsHidden()
                 }
                 GridRow {
-                    Text("Graphique PNG par fichier :")
+                    Text("Export des graphiques :")
                     Picker("", selection: $viewModel.exportGraph) {
-                        Text("Générer").tag(true)
-                        Text("Ne pas générer").tag(false)
+                        Text("Ne pas exporter").tag(false)
+                        Text("Exporter au format .png").tag(true)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
