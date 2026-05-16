@@ -89,7 +89,7 @@ Elles sont des **portages natifs** de leurs équivalents Python ([`scadinot/volt
 ## Prérequis
 
 - **macOS 26.1** ou supérieur (Tahoe — cible définie par `MACOSX_DEPLOYMENT_TARGET = 26.1`).
-- **Xcode 16** ou supérieur (`objectVersion = 77`).
+- **Xcode 26** ou supérieur (`objectVersion = 77`, requis pour le SDK macOS 26).
 - **Swift 5.0**.
 
 Aucune dépendance externe : tout repose sur les frameworks Apple (`SwiftUI`, `AppKit`, `Charts`, `Accelerate`, `Foundation`, `Observation`).
